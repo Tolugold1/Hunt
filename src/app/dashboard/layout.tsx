@@ -8,6 +8,7 @@ const navItems = [
   { href: "/dashboard/profile", label: "Profile & Resume", icon: "👤" },
   { href: "/dashboard/hunts", label: "My Hunts", icon: "🎯" },
   { href: "/dashboard/applications", label: "Applications", icon: "📬" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

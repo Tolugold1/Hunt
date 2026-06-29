@@ -1,4 +1,4 @@
-import { parseResume as parseResumeWithClaude } from "./claude";
+import { parseResume as parseResumeWithClaude } from "./llm";
 
 // pdf-parse is CommonJS only — dynamic import avoids Next.js ESM issues
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {

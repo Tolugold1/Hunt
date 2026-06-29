@@ -8,7 +8,7 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import { PrismaClient } from "@prisma/client";
-import { generateCoverLetter, generateSocialPost } from "../src/lib/claude";
+import { generateCoverLetter, generateSocialPost } from "../src/lib/llm";
 import { QUEUES, getConnection } from "../src/lib/queue";
 import type { GeneratorJobData } from "../src/lib/queue";
 

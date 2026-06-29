@@ -1,53 +1,54 @@
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { v2 as cloudinary } from "cloudinary";
 
-const s3 = new S3Client({
-  region: process.env.S3_REGION ?? "auto",
-  endpoint: process.env.S3_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-  },
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-
-const BUCKET = process.env.S3_BUCKET_NAME ?? "hunt-resumes";
 
 export async function uploadResume(
   userId: string,
   buffer: Buffer,
   filename: string,
-  mimeType: string
-) {
-  const key = `resumes/${userId}/${Date.now()}-${filename}`;
+  _mimeType: string
+): Promise<string> {
+  const publicId = `resumes/${userId}/${Date.now()}-${filename.replace(/\.[^.]+$/, "")}`;
 
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-      // Objects are private by default
-    })
-  );
+  const result = await new Promise<{ public_id: string }>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: "raw",
+        public_id: publicId,
+        overwrite: true,
+        tags: ["resume", userId],
+      },
+      (error, result) => {
+        if (error || !result) return reject(error ?? new Error("Upload failed"));
+        resolve(result as { public_id: string });
+      }
+    );
+    uploadStream.end(buffer);
+  });
 
-  return key;
+  return result.public_id;
 }
 
-export async function getResumeDownloadUrl(key: string, expiresIn = 3600) {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(s3, command, { expiresIn });
+export async function getResumeDownloadUrl(publicId: string): Promise<string> {
+  return cloudinary.url(publicId, {
+    resource_type: "raw",
+    sign_url: true,
+    // Signed URLs expire after 1 hour
+    type: "authenticated",
+  });
 }
 
-export async function getResumeBuffer(key: string): Promise<Buffer> {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  const response = await s3.send(command);
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
+export async function getResumeBuffer(publicId: string): Promise<Buffer> {
+  const url = cloudinary.url(publicId, { resource_type: "raw" });
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch resume from Cloudinary: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+export async function deleteResume(publicId: string): Promise<void> {
+  await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
 }
