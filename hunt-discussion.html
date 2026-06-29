@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hunt — Project Discussion & Technical Observations</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212b;
+    --ink: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #5b8cff;
+    --accent-2: #38d39f;
+    --warn: #ffb454;
+    --danger: #ff6b6b;
+    --border: #262b36;
+    --code: #11141a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 48px 24px 120px; }
+  header.hero {
+    border: 1px solid var(--border); border-radius: 16px; padding: 36px 32px;
+    background: linear-gradient(135deg, #161b27, #11141a);
+    margin-bottom: 36px;
+  }
+  .badge { display:inline-block; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent-2); border:1px solid var(--border); padding:4px 10px; border-radius:999px; margin-bottom:14px;}
+  h1 { font-size: 34px; margin: 0 0 8px; line-height:1.2; }
+  h2 { font-size: 24px; margin: 48px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 18px; margin: 28px 0 8px; color: #cdd5e3; }
+  p, li { color: var(--ink); }
+  .lead { color: var(--muted); font-size: 17px; }
+  .muted { color: var(--muted); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code { background: var(--code); padding: 2px 6px; border-radius: 5px; font-family: "SF Mono", Consolas, monospace; font-size: 13.5px; color:#cfe1ff;}
+  pre { background: var(--code); border:1px solid var(--border); padding:16px; border-radius:10px; overflow:auto; font-size:13px;}
+  .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); }
+  .card { background: var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
+  .card h3 { margin-top:0; }
+  table { width:100%; border-collapse: collapse; margin: 14px 0; font-size:14.5px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.04em;}
+  .callout { border-left:4px solid var(--accent); background:var(--panel-2); padding:14px 18px; border-radius:0 10px 10px 0; margin:18px 0; }
+  .callout.warn { border-color: var(--warn); }
+  .callout.danger { border-color: var(--danger); }
+  .callout.good { border-color: var(--accent-2); }
+  .pill { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); margin-right:6px;}
+  .tag-green { color:var(--accent-2); border-color:#1f4f3f;}
+  .tag-amber { color:var(--warn); border-color:#5a4220;}
+  .tag-red { color:var(--danger); border-color:#5a2424;}
+  .toc { columns:2; column-gap:32px; }
+  .toc a { color:var(--accent); text-decoration:none; }
+  .toc a:hover { text-decoration:underline; }
+  hr { border:none; border-top:1px solid var(--border); margin:40px 0; }
+  .phase { display:flex; gap:14px; align-items:flex-start; margin:14px 0; }
+  .phase .n { flex:0 0 auto; width:34px; height:34px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--accent);}
+  footer { color:var(--muted); font-size:13px; margin-top:60px; text-align:center;}
+  .legend td:first-child { white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="badge">Project Discussion · v1</span>
+    <h1>Hunt — an automation engine for job applications &amp; social presence</h1>
+    <p class="lead">A working-through of what you described: scope, the hard parts nobody mentions up front,
+    a recommended tech stack, an architecture, and a phased plan that gets you to something usable (and portfolio-worthy) fast.</p>
+    <p class="muted" style="margin-bottom:0;">Prepared 2026-06-29 · for Andres</p>
+  </header>
+
+  <h2 id="toc">Contents</h2>
+  <div class="toc">
+    <a href="#what">1. What you're actually building</a><br>
+    <a href="#reality">2. The reality check (read this first)</a><br>
+    <a href="#modules">3. Core modules</a><br>
+    <a href="#arch">4. Architecture</a><br>
+    <a href="#stack">5. Recommended tech stack</a><br>
+    <a href="#jobflow">6. The job-application flow</a><br>
+    <a href="#social">7. The social-posting flow</a><br>
+    <a href="#legal">8. Legal, ToS &amp; ethics</a><br>
+    <a href="#mvp">9. MVP &amp; phasing</a><br>
+    <a href="#money">10. Monetization &amp; positioning</a><br>
+    <a href="#risks">11. Open questions &amp; risks</a><br>
+    <a href="#next">12. Recommended next step</a><br>
+  </div>
+
+  <h2 id="what">1. What you're actually building</h2>
+  <p>It reads like one product, but it's really <strong>two products that share a spine</strong>. Being honest about that
+  early stops you from building a tangled monolith.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Product A — Job Hunt Autopilot</h3>
+      <p class="muted">Ingest a resume → discover matching jobs across sites → draft a tailored cover letter/email → apply (email send or form fill) on a schedule.</p>
+      <span class="pill">resume parsing</span><span class="pill">job discovery</span><span class="pill">matching</span><span class="pill">auto-apply</span>
+    </div>
+    <div class="card">
+      <h3>Product B — Social Presence Booster</h3>
+      <p class="muted">Find/curate articles → generate a platform-native post → schedule &amp; publish to the user's IG / X / Facebook with their permission.</p>
+      <span class="pill">content discovery</span><span class="pill">post generation</span><span class="pill">OAuth publishing</span><span class="pill">scheduler</span>
+    </div>
+  </div>
+  <p>The <strong>shared spine</strong> is: user accounts, a <em>"hunt" definition</em> (what to look for), a <strong>scheduler/job queue</strong>,
+  an <strong>LLM content generator</strong>, connected credentials/integrations, and an activity log. Build the spine once; the two products plug into it.</p>
+
+  <div class="callout">
+    <strong>Reframe of the core concept:</strong> "Hunt" = a saved search + a rule + an action that runs on a schedule.
+    A job hunt and a content hunt are the same primitive with different sources and different actions. Designing around that primitive keeps the system clean.
+  </div>
+
+  <h2 id="reality">2. The reality check (read this first)</h2>
+  <p>This is the part most "auto-apply" projects ignore and then hit a wall on. None of it kills the idea — but it shapes the design heavily.</p>
+
+  <div class="callout danger">
+    <strong>LinkedIn &amp; Indeed actively fight automation.</strong> They have no public "apply" API, their Terms of Service prohibit scraping and
+    bots, and they use sophisticated bot-detection (device fingerprinting, behavioral analysis, CAPTCHAs). Auto-applying through them at scale
+    risks the <em>user's</em> account getting banned. Treat them as <strong>assist, not full-auto</strong> (see below).
+  </div>
+
+  <div class="callout warn">
+    <strong>"Email your CV to this address" jobs are your sweet spot.</strong> These have <em>no</em> anti-bot wall. Drafting a tailored email + attaching
+    a resume + sending from the user's mailbox is fully automatable, legal, and genuinely valuable. Start here — it's exactly your own workflow.
+  </div>
+
+  <div class="callout warn">
+    <strong>Social platforms gate posting behind official APIs and app review.</strong> Instagram &amp; Facebook posting requires the
+    Meta Graph API + a reviewed app + a Business/Creator account. X (Twitter) posting requires paid API tiers. There is no shortcut that's
+    both reliable and ToS-compliant — budget for the API approval process.
+  </div>
+
+  <p><strong>Practical doctrine:</strong> split every integration into one of three tiers.</p>
+  <table class="legend">
+    <tr><th>Tier</th><th>What it means</th><th>Examples</th></tr>
+    <tr><td><span class="pill tag-green">Full-auto</span></td><td>Legal + no anti-bot wall. System acts end-to-end.</td><td>Email-to-apply jobs · RSS/Greenhouse/Lever/Workable job boards (they have APIs/feeds) · Meta &amp; X posting via official APIs</td></tr>
+    <tr><td><span class="pill tag-amber">Assisted</span></td><td>System prepares everything; user does the final click (1-click handoff with pre-filled data).</td><td>Indeed/LinkedIn form applies · sites with CAPTCHAs · custom ATS forms</td></tr>
+    <tr><td><span class="pill tag-red">Manual / link-out</span></td><td>System surfaces the job &amp; a tailored draft, then links the user out.</td><td>Anything with aggressive bot detection or login walls</td></tr>
+  </table>
+
+  <h2 id="modules">3. Core modules</h2>
+  <div class="grid">
+    <div class="card"><h3>1 · Identity &amp; Profile</h3><p class="muted">Accounts, resume upload + structured parse (skills, titles, years, locations), preferences, and the user's sending mailbox connection.</p></div>
+    <div class="card"><h3>2 · Hunt definitions</h3><p class="muted">Saved searches: keywords, location, remote, salary, sources to use, schedule (cron), and the action (apply / draft-only / notify).</p></div>
+    <div class="card"><h3>3 · Source connectors</h3><p class="muted">Pluggable adapters: ATS feeds (Greenhouse, Lever, Workable), job-board APIs, RSS, and email-apply listings. One interface, many implementations.</p></div>
+    <div class="card"><h3>4 · Matching engine</h3><p class="muted">Score a job against the resume (embeddings + rules). Filters noise, ranks, dedupes, avoids re-applying to the same role.</p></div>
+    <div class="card"><h3>5 · Generator (LLM)</h3><p class="muted">Tailored cover-letter emails, application answers, and social posts — grounded in the resume/article so it isn't generic.</p></div>
+    <div class="card"><h3>6 · Action executor</h3><p class="muted">Send email (with resume attached), submit form (assisted/headless browser), or publish post. Idempotent &amp; logged.</p></div>
+    <div class="card"><h3>7 · Scheduler &amp; queue</h3><p class="muted">The heartbeat. Runs hunts at user-set times, rate-limits, retries, and respects daily caps so the user looks human.</p></div>
+    <div class="card"><h3>8 · Activity &amp; review</h3><p class="muted">Dashboard: what was found, what was sent, what's pending approval, response tracking. Trust is built here.</p></div>
+  </div>
+
+  <h2 id="arch">4. Architecture</h2>
+  <pre>
+                         ┌──────────────────────────┐
+                         │      Web App (UI)        │   Next.js / React
+                         │  dashboard · hunts · logs│
+                         └────────────┬─────────────┘
+                                      │ REST / tRPC
+                         ┌────────────▼─────────────┐
+                         │        API server        │   Node (NestJS) or Python (FastAPI)
+                         │  auth · hunts · profiles │
+                         └──────┬─────────────┬─────┘
+                                │             │
+                  enqueue jobs  │             │  read/write
+                         ┌──────▼─────┐   ┌───▼────────┐
+                         │  Job queue │   │  Database  │   Postgres
+                         │ (BullMQ /  │   │ + object   │   + S3/R2 for resumes
+                         │  Redis)    │   │  storage   │
+                         └──────┬─────┘   └────────────┘
+                                │ workers pull
+            ┌───────────────────┼────────────────────┐
+            ▼                   ▼                     ▼
+   ┌─────────────┐    ┌──────────────────┐   ┌──────────────────┐
+   │ Source      │    │ Generator        │   │ Action executor  │
+   │ connectors  │    │ (LLM: Claude)    │   │ email · forms ·  │
+   │ scrape/API  │    │ cover letters,   │   │ social publish   │
+   │             │    │ posts, matching  │   │ (headless browser│
+   └─────────────┘    └──────────────────┘   │  for assisted)   │
+                                             └──────────────────┘
+  </pre>
+  <p>The key decision: <strong>everything heavy runs as background workers off a queue</strong>, never inside a web request. Discovery, LLM
+  generation, and sending are all async, retried, and rate-limited. The web app only enqueues and displays.</p>
+
+  <h2 id="stack">5. Recommended tech stack</h2>
+  <p>Optimized for: you shipping solo, a strong portfolio story, and the fact that connectors/automation lean on a rich ecosystem.</p>
+  <table>
+    <tr><th>Layer</th><th>Recommendation</th><th>Why</th></tr>
+    <tr><td>Frontend</td><td><strong>Next.js (React) + TypeScript + Tailwind</strong></td><td>One framework for UI + API routes, great DX, excellent for a portfolio, easy deploy on Vercel.</td></tr>
+    <tr><td>Backend API</td><td><strong>Node + NestJS</strong> <span class="muted">(or FastAPI if you prefer Python)</span></td><td>Same language as frontend = less context-switching. NestJS gives you structure for the connector/module pattern.</td></tr>
+    <tr><td>Background jobs</td><td><strong>BullMQ + Redis</strong></td><td>The scheduler/queue is the heart of this app. BullMQ does cron, retries, rate-limits, concurrency out of the box.</td></tr>
+    <tr><td>Database</td><td><strong>PostgreSQL + Prisma</strong></td><td>Relational data (users, hunts, applications, posts). Prisma = clean, typed access.</td></tr>
+    <tr><td>File storage</td><td><strong>Cloudflare R2 / AWS S3</strong></td><td>Resumes, generated PDFs, media for posts.</td></tr>
+    <tr><td>LLM</td><td><strong>Claude API (Opus/Sonnet)</strong></td><td>Cover letters, post generation, resume parsing, job-match reasoning. Use a small model for cheap classification, big for writing.</td></tr>
+    <tr><td>Matching</td><td><strong>Embeddings + pgvector</strong></td><td>Semantic similarity between resume and job descriptions, stored right in Postgres.</td></tr>
+    <tr><td>Email sending</td><td><strong>User's own mailbox via Gmail/Outlook OAuth</strong> (preferred) · or SMTP</td><td>Sending <em>as the user</em> is critical for job email — recruiters must reply to the user, not a SaaS address. Avoids spam/deliverability hits.</td></tr>
+    <tr><td>Assisted form-fill</td><td><strong>Playwright</strong> (headless/headful browser)</td><td>For the "assisted" tier — pre-fills forms, hands off to user. Also for sites without APIs (carefully, ToS-aware).</td></tr>
+    <tr><td>Social posting</td><td><strong>Meta Graph API · X API · LinkedIn API</strong></td><td>Official APIs only. Each needs OAuth + app review. No reliable shortcut.</td></tr>
+    <tr><td>Auth</td><td><strong>Auth.js (NextAuth) or Clerk</strong></td><td>Handles user login + the OAuth flows you need for mailbox &amp; social connections.</td></tr>
+    <tr><td>Hosting</td><td><strong>Vercel (web) + Railway/Render/Fly (workers + Redis + Postgres)</strong></td><td>Workers can't live on serverless well — they need a long-running host.</td></tr>
+  </table>
+
+  <div class="callout good">
+    <strong>Why not all-Python?</strong> You could do FastAPI + Celery + React and it's perfectly valid (Python is strong for scraping/parsing/ML).
+    But a single TypeScript codebase end-to-end is faster for a solo builder and reads cleanly in a portfolio. Pick the one you'll actually finish.
+  </div>
+
+  <h2 id="jobflow">6. The job-application flow</h2>
+  <ol>
+    <li><strong>Setup (once):</strong> user uploads resume → parsed into structured profile; connects their sending mailbox via OAuth; sets preferences (titles, locations, remote, salary, sites).</li>
+    <li><strong>Define a hunt:</strong> "Backend roles, remote, Nigeria/EU, run every weekday 9am, max 10 applications/day, draft-and-send for email jobs, draft-only for form jobs."</li>
+    <li><strong>Discovery (worker):</strong> connectors pull new listings from enabled sources; dedupe against history.</li>
+    <li><strong>Match &amp; rank:</strong> score each job vs resume; keep those above a threshold.</li>
+    <li><strong>Generate:</strong> for each kept job, Claude writes a tailored cover-letter email grounded in the resume + JD (not a generic template).</li>
+    <li><strong>Action by tier:</strong>
+      <ul>
+        <li><span class="pill tag-green">Email job</span> → attach resume, send from user's mailbox (optionally after user approval for the first N).</li>
+        <li><span class="pill tag-amber">Form job</span> → Playwright pre-fills; user gets a "review &amp; submit" link.</li>
+        <li><span class="pill tag-red">Walled</span> → surface job + draft in dashboard; link out.</li>
+      </ul>
+    </li>
+    <li><strong>Log &amp; track:</strong> every application recorded; later, parse replies in the mailbox to track responses/interviews.</li>
+  </ol>
+  <div class="callout warn"><strong>Approval mode matters for trust.</strong> Default new users to <em>"draft, I approve, then send"</em>. Only unlock full-auto once they trust the quality. This also keeps you on the right side of "the user authorized each action."</div>
+
+  <h2 id="social">7. The social-posting flow</h2>
+  <ol>
+    <li>User connects IG/X/Facebook/LinkedIn via OAuth (each platform's official flow).</li>
+    <li>User defines a content hunt: topics/keywords, sources (RSS, news APIs, newsletters), cadence, and tone/voice.</li>
+    <li>Worker discovers articles → Claude generates a platform-native post (caption + hashtags for IG, thread for X, etc.), optionally an image.</li>
+    <li><strong>Human-in-the-loop queue:</strong> posts land in an approval queue. User approves/edits → scheduler publishes at the set time via the platform API.</li>
+  </ol>
+  <div class="callout danger"><strong>Compliance reality:</strong> auto-posting copyrighted article content can be a problem — generate <em>commentary/summaries with attribution</em>, not copy-paste. And platform app review will ask exactly how you use posting permissions, so keep it clean and user-initiated.</div>
+
+  <h2 id="legal">8. Legal, ToS &amp; ethics — design constraints, not afterthoughts</h2>
+  <ul>
+    <li><strong>Scraping:</strong> prefer official APIs/feeds (Greenhouse, Lever, Workable, RSS) over scraping LinkedIn/Indeed. Where you must scrape, scrape only what's permitted and rate-limit hard.</li>
+    <li><strong>Acting as the user:</strong> always under explicit user authorization, from the user's own accounts/mailbox. You're an assistant tool, not an impersonation service.</li>
+    <li><strong>Credentials:</strong> use OAuth, never store raw passwords. Encrypt tokens at rest. This is a hard requirement, not a nice-to-have.</li>
+    <li><strong>Rate &amp; volume caps:</strong> daily limits per user protect their accounts <em>and</em> keep quality high. "Spray 500 applications" is a feature that gets users banned and tanks reputation — don't build it.</li>
+    <li><strong>Data privacy:</strong> resumes are sensitive PII. Clear retention/deletion, encryption, and a privacy policy from day one.</li>
+    <li><strong>Honesty in applications:</strong> the generator must not fabricate experience. Ground everything in the actual resume.</li>
+  </ul>
+
+  <h2 id="mvp">9. MVP &amp; phasing</h2>
+  <p>Resist building both products at once. Here's the order that gets you something real and demo-able fastest, each phase shippable on its own.</p>
+
+  <div class="phase"><div class="n">1</div><div>
+    <strong>Email-apply MVP (the wedge).</strong> Resume upload + parse · connect Gmail · one source of "email-to-apply" jobs (or manual paste) · Claude drafts the email · user approves · send with resume attached · log it. <span class="muted">This alone replicates your personal workflow and is fully legal/automatable. Ship this first.</span>
+  </div></div>
+  <div class="phase"><div class="n">2</div><div>
+    <strong>Discovery + scheduling.</strong> Add 2–3 API/feed-based job sources, the matching engine, and the scheduler so hunts run on their own. Now it's "autopilot," not a one-off helper.
+  </div></div>
+  <div class="phase"><div class="n">3</div><div>
+    <strong>Assisted form-fill.</strong> Playwright pre-fills application forms with a review-and-submit handoff. Extends coverage to the big boards without crossing auto-submit lines.
+  </div></div>
+  <div class="phase"><div class="n">4</div><div>
+    <strong>Social presence module.</strong> Reuse the spine (hunts, generator, scheduler) for content discovery + approval queue + publishing via official APIs. Start with one platform (X or LinkedIn are easiest to get approved).
+  </div></div>
+  <div class="phase"><div class="n">5</div><div>
+    <strong>Polish &amp; trust.</strong> Response tracking, analytics (application→reply→interview rates, post engagement), multi-user, billing.
+  </div></div>
+
+  <h2 id="money">10. Monetization &amp; positioning</h2>
+  <div class="grid">
+    <div class="card"><h3>Pricing model</h3><p class="muted">Freemium: free = X applications/posts per month + draft-only. Paid tiers = higher volume, full-auto, more sources, response analytics. LLM + browser automation are your real costs, so meter on actions.</p></div>
+    <div class="card"><h3>Who it's for</h3><p class="muted">Active job-seekers (esp. high-volume markets), freelancers/creators who need consistent posting, and bootcamp grads. Your own use case is the proof.</p></div>
+    <div class="card"><h3>Portfolio angle</h3><p class="muted">Shows off: queue/worker architecture, LLM integration, OAuth with multiple providers, browser automation, and a real product story. Strong signal for backend/full-stack roles.</p></div>
+    <div class="card"><h3>Moat / differentiation</h3><p class="muted">Quality of tailoring + trust (human-in-loop) beats spray-and-pray competitors. "Increase application <em>rate</em> without nuking your reputation."</p></div>
+  </div>
+
+  <h2 id="risks">11. Open questions &amp; risks to decide on</h2>
+  <ul>
+    <li><strong>Single language or split?</strong> All-TypeScript (fastest solo) vs Python backend (better scraping/ML libs). I lean all-TS for v1.</li>
+    <li><strong>How much full-auto to allow?</strong> The more auto, the higher the value <em>and</em> the risk. Recommend approval-first by default.</li>
+    <li><strong>Which sources realistically?</strong> Audit which of your sites (Indeed, LinkedIn, MyJobMag, CryptoJobsList) have feeds/APIs vs need assisted/manual. CryptoJobsList &amp; ATS-backed boards are likely easier than LinkedIn/Indeed.</li>
+    <li><strong>Social app review timeline.</strong> Meta/X app approval can take weeks — start that process early if Product B matters to you.</li>
+    <li><strong>Deliverability.</strong> Sending from the user's own mailbox (OAuth) sidesteps most spam issues vs sending from your servers.</li>
+    <li><strong>Cost control.</strong> LLM + headless browsers + storage add up. Cache aggressively, use small models for filtering, big models only for final writing.</li>
+  </ul>
+
+  <h2 id="next">12. Recommended next step</h2>
+  <div class="callout good">
+    <p style="margin-top:0;"><strong>Build Phase 1 (Email-apply MVP) end-to-end first.</strong> It's the smallest slice that fully replicates your own job-application workflow, has zero ToS landmines, and proves the spine (auth → resume parse → LLM draft → mailbox send → log). Everything else bolts onto that.</p>
+    <p style="margin-bottom:0;">Once you're happy with this discussion, the natural follow-ups are: (a) a concrete data model + screen list for Phase 1, (b) a source-connector audit of your specific job sites, or (c) a repo scaffold. Tell me which and I'll start.</p>
+  </div>
+
+  <footer>Hunt · project discussion document · generated for planning purposes. Decisions here are starting points, not final commitments.</footer>
+</div>
+</body>
+</html>

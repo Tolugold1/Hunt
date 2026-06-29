@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth (NextAuth v5) ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  profile      Profile?
+  hunts        Hunt[]
+  applications Application[]
+  socialPosts  SocialPost[]
+  mailboxes    Mailbox[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  resumeUrl       String?
+  resumeText      String?  @db.Text
+  fullName        String?
+  headline        String?
+  summary         String?  @db.Text
+  skills          String[]
+  jobTitles       String[]
+  experienceYears Int?
+  location        String?
+  remoteOk        Boolean  @default(true)
+  salaryCurrency  String?
+  salaryMin       Int?
+  salaryMax       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Mailbox ─────────────────────────────────────────────────────────────────
+
+model Mailbox {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String
+  email        String
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime?
+  isDefault    Boolean   @default(false)
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, email])
+}
+
+// ─── Hunt (saved search + rules + schedule) ──────────────────────────────────
+
+model Hunt {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  type        HuntType @default(JOB)
+  isActive    Boolean  @default(true)
+
+  keywords         String[]
+  location         String?
+  remoteOnly       Boolean  @default(false)
+  salaryMin        Int?
+  sources          String[]
+  topics           String[]
+  platforms        String[]
+  tone             String?
+  cronExpression   String?
+  maxActionsPerRun Int      @default(10)
+  approvalRequired Boolean  @default(true)
+
+  applications Application[]
+  socialPosts  SocialPost[]
+
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum HuntType {
+  JOB
+  SOCIAL
+}
+
+// ─── Job Application ─────────────────────────────────────────────────────────
+
+model Application {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  huntId    String?
+  hunt      Hunt?   @relation(fields: [huntId], references: [id])
+  mailboxId String?
+  mailbox   Mailbox? @relation(fields: [mailboxId], references: [id])
+
+  jobTitle        String
+  company         String
+  jobUrl          String?
+  jobDescription  String?  @db.Text
+  applyEmail      String?
+  source          String?
+  jobExternalId   String?
+
+  applyType    ApplyType @default(EMAIL)
+  coverLetter  String?   @db.Text
+  emailSubject String?
+
+  status       ApplicationStatus @default(DRAFT)
+  sentAt       DateTime?
+  messageId    String?
+
+  repliedAt    DateTime?
+  replySnippet String?   @db.Text
+  interviewAt  DateTime?
+  outcome      String?
+
+  matchScore Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jobExternalId, source])
+}
+
+enum ApplyType {
+  EMAIL
+  FORM
+  LINK_OUT
+}
+
+enum ApplicationStatus {
+  DRAFT
+  APPROVED
+  SENT
+  FAILED
+  REJECTED_BY_USER
+  REPLIED
+  INTERVIEW
+}
+
+// ─── Social Post ─────────────────────────────────────────────────────────────
+
+model SocialPost {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  huntId String?
+  hunt   Hunt?  @relation(fields: [huntId], references: [id])
+
+  platform    String
+  content     String   @db.Text
+  mediaUrls   String[]
+  sourceUrl   String?
+  sourceTitle String?
+
+  status      PostStatus @default(DRAFT)
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  platformId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PostStatus {
+  DRAFT
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  REJECTED_BY_USER
+}
