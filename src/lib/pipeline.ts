@@ -27,13 +27,15 @@ export async function generateApplicationDraft(applicationId: string, userId: st
     return;
   }
 
-  const profileWithArrays = profile as typeof profile & { skills?: string[]; jobTitles?: string[] };
+  const profileWithArrays = profile as typeof profile & { skills?: string[]; jobTitles?: string[]; aiProvider?: string };
+  const provider = profileWithArrays.aiProvider ?? null;
 
   const matchResult = await scoreJobMatch({
     jobDescription: application.jobDescription ?? "",
     resumeText: profile.resumeText,
     skills: profileWithArrays.skills ?? [],
     jobTitles: profileWithArrays.jobTitles ?? [],
+    provider,
   });
 
   console.log(`[pipeline] ${applicationId} score: ${matchResult.score} — ${matchResult.reason}`);
@@ -58,6 +60,7 @@ export async function generateApplicationDraft(applicationId: string, userId: st
     jobDescription: application.jobDescription ?? "",
     resumeText: profile.resumeText,
     userName: profile.fullName ?? "Applicant",
+    provider,
   });
 
   const subject =

@@ -81,6 +81,7 @@ model Profile {
   linkedInUrl     String?
   githubUrl       String?
   portfolioUrl    String?
+  aiProvider      String   @default("claude")
   remoteOk        Boolean  @default(true)
   salaryCurrency  String?
   salaryMin       Int?

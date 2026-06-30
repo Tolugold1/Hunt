@@ -12,10 +12,30 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export type LLMProvider = "claude" | "openai" | "gemini";
 
-export function getProvider(): LLMProvider {
-  const p = process.env.LLM_PROVIDER?.toLowerCase();
-  if (p === "openai" || p === "gemini") return p;
-  return "claude"; // default
+export const PROVIDER_LABELS: Record<LLMProvider, string> = {
+  claude: "Claude (Anthropic)",
+  openai: "GPT-4 (OpenAI)",
+  gemini: "Gemini (Google)",
+};
+
+const FALLBACK_ORDER: LLMProvider[] = ["claude", "openai", "gemini"];
+
+export function getProvider(override?: string | null): LLMProvider {
+  const p = (override ?? process.env.LLM_PROVIDER ?? "").toLowerCase();
+  if (p === "openai" || p === "gemini" || p === "claude") return p;
+  return "claude";
+}
+
+function isQuotaError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+  return (
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("429") ||
+    msg.includes("insufficient_quota") ||
+    msg.includes("credit") ||
+    msg.includes("overloaded")
+  );
 }
 
 // ─── JSON extraction — handles code fences and raw JSON ──────────────────────
@@ -38,11 +58,11 @@ function extractJSON(text: string): any | null {
 
 // ─── Internal: call the active provider ──────────────────────────────────────
 
-export async function complete(
+async function completeWithProvider(
+  provider: LLMProvider,
   prompt: string,
-  opts: { fast?: boolean; maxTokens?: number; prefill?: string } = {}
+  opts: { fast?: boolean; maxTokens?: number; prefill?: string }
 ): Promise<string> {
-  const provider = getProvider();
   const maxTokens = opts.maxTokens ?? (opts.fast ? 512 : 1024);
 
   if (provider === "openai") {
@@ -74,6 +94,35 @@ export async function complete(
   const res = await client.messages.create({ model, max_tokens: maxTokens, messages });
   const text = res.content[0].type === "text" ? res.content[0].text.trim() : "";
   return opts.prefill ? opts.prefill + text : text;
+}
+
+// ─── Public complete() with auto-fallback on quota errors ────────────────────
+
+export async function complete(
+  prompt: string,
+  opts: { fast?: boolean; maxTokens?: number; prefill?: string; provider?: string | null } = {}
+): Promise<string> {
+  const preferred = getProvider(opts.provider);
+  // Build fallback chain: preferred first, then the others in order
+  const chain: LLMProvider[] = [
+    preferred,
+    ...FALLBACK_ORDER.filter((p) => p !== preferred),
+  ];
+
+  let lastErr: unknown;
+  for (const provider of chain) {
+    try {
+      return await completeWithProvider(provider, prompt, opts);
+    } catch (err) {
+      if (isQuotaError(err)) {
+        console.warn(`[llm] ${provider} quota/rate-limit — trying next provider`);
+        lastErr = err;
+        continue;
+      }
+      throw err; // non-quota errors bubble up immediately
+    }
+  }
+  throw lastErr ?? new Error("All LLM providers failed");
 }
 
 // ─── Public functions (provider-agnostic) ────────────────────────────────────
@@ -124,12 +173,14 @@ export async function generateCoverLetter({
   jobDescription,
   resumeText,
   userName,
+  provider,
 }: {
   jobTitle: string;
   company: string;
   jobDescription: string;
   resumeText: string;
   userName: string;
+  provider?: string | null;
 }): Promise<string> {
   const prompt = `You are completing a cover letter for ${userName} applying for "${jobTitle}" at ${company}.
 
@@ -175,7 +226,7 @@ ${jobDescription.slice(0, 2000)}
 RESUME:
 ${resumeText.slice(0, 3000)}`;
 
-  return complete(prompt, { maxTokens: 1800 });
+  return complete(prompt, { maxTokens: 1800, provider });
 }
 
 export async function scoreJobMatch({
@@ -183,11 +234,13 @@ export async function scoreJobMatch({
   resumeText,
   skills,
   jobTitles,
+  provider,
 }: {
   jobDescription: string;
   resumeText: string;
   skills: string[];
   jobTitles: string[];
+  provider?: string | null;
 }): Promise<{ score: number; reason: string }> {
   const prompt = `Score how well this candidate matches this job posting. Return ONLY valid JSON: {"score": 0.0, "reason": "one sentence"}
 
@@ -207,7 +260,7 @@ Resume excerpt: ${resumeText.slice(0, 1500)}
 Job posting:
 ${jobDescription.slice(0, 1500)}`;
 
-  const raw = await complete(prompt, { fast: true });
+  const raw = await complete(prompt, { fast: true, provider });
   const parsed = extractJSON(raw);
   if (!parsed) return { score: 0.5, reason: "Could not score" };
   return parsed as { score: number; reason: string };

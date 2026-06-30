@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import ResumeUpload from "./ResumeUpload";
+import AIProviderSelector from "./AIProviderSelector";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -146,6 +147,11 @@ export default async function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* AI Provider */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <AIProviderSelector current={(profile as { aiProvider?: string } | null)?.aiProvider ?? "claude"} />
+      </div>
 
       {/* Mailbox */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
