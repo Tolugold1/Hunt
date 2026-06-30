@@ -11,6 +11,7 @@ const CreateHuntSchema = z.object({
   location: z.string().optional(),
   remoteOnly: z.boolean().default(false),
   salaryMin: z.number().optional(),
+  salaryCurrency: z.string().default("USD"),
   sources: z.array(z.string()).default(["email-apply"]),
   topics: z.array(z.string()).default([]),
   platforms: z.array(z.string()).default([]),
@@ -43,9 +44,16 @@ export async function POST(req: NextRequest) {
   const parsed = CreateHuntSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const hunt = await db.hunt.create({
-    data: { userId: session.user.id, ...parsed.data },
-  });
-
-  return NextResponse.json(hunt, { status: 201 });
+  try {
+    const hunt = await db.hunt.create({
+      data: { userId: session.user.id, ...parsed.data },
+    });
+    return NextResponse.json(hunt, { status: 201 });
+  } catch (err) {
+    console.error("[POST /api/hunts]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Database error" },
+      { status: 500 }
+    );
+  }
 }

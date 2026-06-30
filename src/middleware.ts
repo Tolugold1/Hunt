@@ -1,19 +1,8 @@
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 
-export default auth((req) => {
-  const isAuthenticated = !!req.auth;
-  const isOnDashboard = req.nextUrl.pathname.startsWith("/dashboard");
-  const isOnLogin = req.nextUrl.pathname === "/login";
-
-  if (isOnDashboard && !isAuthenticated) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  if (isOnLogin && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-});
+// Only imports auth.config — no pg/Prisma, safe for Edge Runtime
+export default NextAuth(authConfig).auth;
 
 export const config = {
   matcher: ["/dashboard/:path*", "/login"],

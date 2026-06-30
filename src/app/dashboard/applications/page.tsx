@@ -16,17 +16,19 @@ const STATUS_LABELS: Record<ApplicationStatus, { label: string; color: string }>
 export default async function ApplicationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; huntId?: string }>;
 }) {
   const session = await auth();
   const userId = session!.user!.id!;
-  const { status } = await searchParams;
+  const { status, huntId } = await searchParams;
 
   const applications = await db.application.findMany({
     where: {
       userId,
       ...(status ? { status: status as ApplicationStatus } : {}),
+      ...(huntId ? { huntId } : {}),
     },
+    include: { hunt: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -53,23 +55,34 @@ export default async function ApplicationsPage({
         </Link>
       </div>
 
+      {/* Hunt filter banner */}
+      {huntId && (
+        <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-2.5">
+          <span className="text-sm text-blue-300">
+            Showing applications from this hunt
+          </span>
+          <Link href="/dashboard/applications" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+            Clear filter ×
+          </Link>
+        </div>
+      )}
+
       {/* Status filter tabs */}
       <div className="flex gap-2 flex-wrap">
-        <Link
-          href="/dashboard/applications"
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!status ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
-        >
-          All ({applications.length})
-        </Link>
-        {(["DRAFT", "APPROVED", "SENT", "REPLIED", "INTERVIEW"] as ApplicationStatus[]).map((s) => (
+        {[
+          { label: `All (${applications.length})`, href: huntId ? `/dashboard/applications?huntId=${huntId}` : "/dashboard/applications", active: !status },
+          ...(["DRAFT", "APPROVED", "SENT", "REPLIED", "INTERVIEW"] as ApplicationStatus[]).map((s) => ({
+            label: `${STATUS_LABELS[s].label} (${counts[s] ?? 0})`,
+            href: `/dashboard/applications?status=${s}${huntId ? `&huntId=${huntId}` : ""}`,
+            active: status === s,
+          })),
+        ].map((tab) => (
           <Link
-            key={s}
-            href={`/dashboard/applications?status=${s}`}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              status === s ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
-            }`}
+            key={tab.label}
+            href={tab.href}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab.active ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"}`}
           >
-            {STATUS_LABELS[s].label} ({counts[s] ?? 0})
+            {tab.label}
           </Link>
         ))}
       </div>
@@ -107,11 +120,14 @@ export default async function ApplicationsPage({
                     </span>
                   </div>
                 </div>
-                {app.applyEmail && (
-                  <div className="text-xs text-gray-500 mt-1">→ {app.applyEmail}</div>
-                )}
-                <div className="text-xs text-gray-600 mt-1">
-                  {new Date(app.createdAt).toLocaleDateString()}
+                <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                  {app.applyEmail && <span>→ {app.applyEmail}</span>}
+                  {(app as typeof app & { hunt?: { name: string } | null }).hunt?.name && (
+                    <span className="text-blue-500/70">
+                      {(app as typeof app & { hunt?: { name: string } | null }).hunt!.name}
+                    </span>
+                  )}
+                  <span>{new Date(app.createdAt).toLocaleDateString()}</span>
                 </div>
               </Link>
             );

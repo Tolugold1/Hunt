@@ -28,7 +28,7 @@ export default async function Home() {
             Get Started
           </Link>
           <Link
-            href="/hunt-discussion.html"
+            href="/how-it-works"
             className="px-6 py-3 border border-gray-700 hover:border-gray-500 text-gray-300 rounded-lg font-semibold transition-colors"
           >
             How it works

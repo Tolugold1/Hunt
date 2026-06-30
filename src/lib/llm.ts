@@ -20,7 +20,7 @@ export function getProvider(): LLMProvider {
 
 // ─── Internal: call the active provider ──────────────────────────────────────
 
-async function complete(prompt: string, opts: { fast?: boolean } = {}): Promise<string> {
+export async function complete(prompt: string, opts: { fast?: boolean } = {}): Promise<string> {
   const provider = getProvider();
 
   if (provider === "openai") {
