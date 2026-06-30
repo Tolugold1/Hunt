@@ -14,7 +14,8 @@ const AddSchema = z.object({
 async function testSmtpConnection(email: string, password: string): Promise<"ok" | "bad_credentials" | "unreachable"> {
   for (const { port, secure } of [{ port: 465, secure: true }, { port: 587, secure: false }]) {
     try {
-      const t = nodemailer.createTransport({ host: "smtp.gmail.com", port, secure, family: 4, auth: { user: email, pass: password } });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = nodemailer.createTransport({ host: "smtp.gmail.com", port, secure, family: 4, auth: { user: email, pass: password } } as any);
       await t.verify();
       return "ok";
     } catch (err) {

@@ -26,24 +26,25 @@ function getOAuth2ClientForMailbox(mailbox: Mailbox) {
 
 async function createTransporter(mailbox: Mailbox) {
   if (mailbox.provider === "gmail-smtp") {
-    // Try port 465 (SSL) first — 587 (STARTTLS) is often blocked by ISPs/firewalls
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
       secure: true,
       family: 4,
       auth: { user: mailbox.email, pass: mailbox.accessToken },
-    });
+    } as any);
   }
 
   if (mailbox.provider === "smtp") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return nodemailer.createTransport({
       host: mailbox.smtpHost ?? "smtp.gmail.com",
       port: mailbox.smtpPort ?? 587,
       secure: (mailbox.smtpPort ?? 587) === 465,
       family: 4,
       auth: { user: mailbox.email, pass: mailbox.accessToken },
-    });
+    } as any);
   }
 
   // gmail-oauth (default)
