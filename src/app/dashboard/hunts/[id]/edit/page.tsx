@@ -30,6 +30,7 @@ export default async function EditHuntPage({ params }: { params: Promise<{ id: s
         topics: hunt.topics,
         platforms: hunt.platforms,
         tone: hunt.tone ?? "professional",
+        cronExpression: hunt.cronExpression ?? "",
         maxActionsPerRun: hunt.maxActionsPerRun,
         approvalRequired: hunt.approvalRequired,
       }}

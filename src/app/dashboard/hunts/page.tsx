@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import RunHuntButton from "./RunHuntButton";
 import HuntsToast from "./HuntsToast";
 import DeleteHuntButton from "./DeleteHuntButton";
+import { scheduleLabel } from "@/lib/pipeline";
 
 export default async function HuntsPage() {
   const session = await auth();
@@ -83,11 +84,11 @@ export default async function HuntsPage() {
                   >
                     {itemCount} {itemCount === 1 ? "application" : "applications"}
                   </Link>
-                  <span className="text-xs text-gray-700 flex items-center gap-1">
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                       <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                     </svg>
-                    Schedule: coming soon
+                    {scheduleLabel(hunt.cronExpression)}
                   </span>
                   {hunt.lastRunAt && (
                     <span className="text-xs text-gray-600">

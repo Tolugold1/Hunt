@@ -16,6 +16,7 @@ const UpdateHuntSchema = z.object({
   topics: z.array(z.string()).optional(),
   platforms: z.array(z.string()).optional(),
   tone: z.string().optional(),
+  cronExpression: z.string().nullable().optional(),
   maxActionsPerRun: z.number().optional(),
   approvalRequired: z.boolean().optional(),
   isActive: z.boolean().optional(),

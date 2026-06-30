@@ -11,7 +11,6 @@ interface RunResult {
   sources: string[];
   errors: string[];
   coverLettersQueued: number;
-  queueError: string | null;
 }
 
 type RunState = "idle" | "running" | "done" | "error";
@@ -81,12 +80,7 @@ export default function RunHuntButton({ huntId, huntName }: { huntId: string; hu
         )}
         {result.coverLettersQueued > 0 && (
           <span className="text-xs text-blue-500">
-            ✉ {result.coverLettersQueued} cover letter{result.coverLettersQueued !== 1 ? "s" : ""} queuing…
-          </span>
-        )}
-        {result.queueError && (
-          <span className="text-xs text-yellow-600 leading-snug">
-            Workers offline — start with: npm run workers
+            ✉ {result.coverLettersQueued} cover letter{result.coverLettersQueued !== 1 ? "s" : ""} ready
           </span>
         )}
         {result.errors.length > 0 && (

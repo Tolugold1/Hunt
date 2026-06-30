@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { runJobDiscovery } from "@/lib/job-discovery";
+import { generateApplicationDraft } from "@/lib/pipeline";
 import { getGeneratorQueue } from "@/lib/queue";
+
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -16,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Social hunts not yet supported for manual runs" }, { status: 400 });
   }
 
-  // ── Step 1: Run job discovery inline (always — immediate results) ─────────
+  // ── Step 1: Run job discovery inline ─────────────────────────────────────
   let discovery;
   try {
     discovery = await runJobDiscovery(hunt);
@@ -30,31 +33,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   await db.hunt.update({ where: { id }, data: { lastRunAt: new Date() } });
 
-  // ── Step 2: Queue cover-letter generation for each new application ────────
+  if (discovery.applicationIds.length === 0) {
+    return NextResponse.json({
+      success: true,
+      fetched: discovery.fetched,
+      matched: discovery.matched,
+      created: 0,
+      skipped: discovery.skipped,
+      sources: discovery.sources,
+      errors: discovery.errors,
+      coverLettersQueued: 0,
+      queueError: null,
+    });
+  }
+
+  // ── Step 2: Try BullMQ first, fall back to inline generation ─────────────
   let coverLettersQueued = 0;
   let queueError: string | null = null;
 
-  if (discovery.applicationIds.length > 0) {
-    try {
-      const queue = getGeneratorQueue();
-      await Promise.all(
-        discovery.applicationIds.map((applicationId) =>
-          queue.add(
-            "cover-letter",
-            { type: "cover-letter", applicationId, userId: hunt.userId },
-            { attempts: 3, backoff: { type: "exponential", delay: 3000 } }
-          )
+  try {
+    const queue = getGeneratorQueue();
+    await Promise.all(
+      discovery.applicationIds.map((applicationId) =>
+        queue.add(
+          "cover-letter",
+          { type: "cover-letter", applicationId, userId: hunt.userId },
+          { attempts: 3, backoff: { type: "exponential", delay: 3000 } }
         )
-      );
-      coverLettersQueued = discovery.applicationIds.length;
-    } catch (err) {
-      // Redis not running — applications still exist, cover letters just won't
-      // be auto-generated. Worker can be started separately.
-      queueError =
-        err instanceof Error && err.message.includes("ECONNREFUSED")
-          ? "Redis not running — start it with: redis-server, then: npm run workers"
-          : "Could not queue cover-letter generation";
-      console.warn("[hunt/run] queue unavailable:", queueError);
+      )
+    );
+    coverLettersQueued = discovery.applicationIds.length;
+  } catch {
+    // Redis not running — generate inline (works on Vercel without workers)
+    console.log("[hunt/run] BullMQ unavailable — generating cover letters inline");
+    for (const applicationId of discovery.applicationIds) {
+      try {
+        await generateApplicationDraft(applicationId, hunt.userId);
+        coverLettersQueued++;
+      } catch (err) {
+        console.error(`[hunt/run] inline cover letter failed for ${applicationId}:`, err);
+      }
     }
   }
 

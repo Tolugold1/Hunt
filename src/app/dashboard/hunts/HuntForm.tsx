@@ -45,6 +45,7 @@ export interface HuntInitialValues {
   topics?: string[];
   platforms?: string[];
   tone?: string;
+  cronExpression?: string | null;
   maxActionsPerRun?: number;
   approvalRequired?: boolean;
 }
@@ -70,6 +71,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
   const [description, setDescription] = useState(initial.description ?? "");
   const [maxActionsPerRun, setMaxActionsPerRun] = useState(initial.maxActionsPerRun ?? 10);
   const [approvalRequired, setApprovalRequired] = useState(initial.approvalRequired ?? true);
+  const [cronExpression, setCronExpression] = useState(initial.cronExpression ?? "");
 
   // JOB
   const [keywords, setKeywords] = useState<string[]>(initial.keywords ?? []);
@@ -144,6 +146,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
       type,
       maxActionsPerRun,
       approvalRequired,
+      cronExpression: cronExpression || null,
       keywords: type === "JOB" ? keywords : [],
       location: type === "JOB" ? location.trim() || undefined : undefined,
       remoteOnly: type === "JOB" ? remoteOnly : false,
@@ -390,16 +393,32 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
           </div>
         )}
 
-        {/* Schedule — Coming Soon */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center gap-2 rounded-xl">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 border border-gray-700 rounded-full px-3 py-1 bg-gray-900">Coming Soon</span>
-            <p className="text-xs text-gray-500 text-center max-w-xs px-4">Scheduling will be enabled in production. Use "Run now" for now.</p>
+        {/* Schedule */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Auto-run schedule</h2>
+            <p className="text-xs text-gray-500 mt-1">Hunt will run automatically on Vercel. "Manual only" means you trigger it yourself.</p>
           </div>
-          <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-3">Schedule</h2>
           <div className="flex flex-wrap gap-2">
-            {["Twice a day", "Once a day", "Every 6 hours", "Weekdays only", "Manual only"].map((l) => (
-              <span key={l} className="px-3 py-1.5 rounded-lg text-xs border border-gray-800 text-gray-700">{l}</span>
+            {[
+              { value: "", label: "Manual only" },
+              { value: "6h", label: "Every 6 hours" },
+              { value: "12h", label: "Twice a day" },
+              { value: "24h", label: "Daily" },
+              { value: "168h", label: "Weekly" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setCronExpression(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                  cronExpression === opt.value
+                    ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                    : "border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300"
+                }`}
+              >
+                {opt.label}
+              </button>
             ))}
           </div>
         </div>
