@@ -74,6 +74,16 @@ export default async function ApplicationDetailPage({
         )}
       </div>
 
+      {/* Failure reason */}
+      {application.status === "FAILED" && (application as typeof application & { failureReason?: string | null }).failureReason && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4">
+          <div className="text-xs text-red-400 font-medium mb-1">Send failed — reason:</div>
+          <div className="text-sm text-red-300 font-mono">
+            {(application as typeof application & { failureReason?: string | null }).failureReason}
+          </div>
+        </div>
+      )}
+
       {/* Cover letter draft */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
@@ -91,8 +101,9 @@ export default async function ApplicationDetailPage({
               coverLetter: application.coverLetter,
               emailSubject: application.emailSubject,
               applyEmail: application.applyEmail,
-              mailboxId: application.mailboxId,
               applyType: application.applyType,
+              jobUrl: application.jobUrl,
+              mailboxId: application.mailboxId,
             }}
             mailboxes={mailboxes.map((m) => ({ id: m.id, email: m.email }))}
           />

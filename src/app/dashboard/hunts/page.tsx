@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import RunHuntButton from "./RunHuntButton";
 import HuntsToast from "./HuntsToast";
+import DeleteHuntButton from "./DeleteHuntButton";
 
 export default async function HuntsPage() {
   const session = await auth();
@@ -63,7 +64,14 @@ export default async function HuntsPage() {
                     </div>
                   </div>
 
-                  <div className="shrink-0 mt-0.5">
+                  <div className="flex items-center gap-3 shrink-0 mt-0.5">
+                    <DeleteHuntButton huntId={hunt.id} huntName={hunt.name} />
+                    <Link
+                      href={`/dashboard/hunts/${hunt.id}/edit`}
+                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Edit
+                    </Link>
                     <RunHuntButton huntId={hunt.id} huntName={hunt.name} />
                   </div>
                 </div>

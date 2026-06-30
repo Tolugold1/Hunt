@@ -5,11 +5,26 @@ import { getActionExecutorQueue } from "@/lib/queue";
 import { z } from "zod";
 
 const UpdateSchema = z.object({
-  action: z.enum(["approve", "reject", "update-draft"]).optional(),
+  action: z.enum(["approve", "reject", "update-draft", "retry"]).optional(),
   coverLetter: z.string().optional(),
   emailSubject: z.string().optional(),
   mailboxId: z.string().optional(),
 });
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const application = await db.application.findFirst({ where: { id, userId: session.user.id } });
+  if (!application) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await db.application.delete({ where: { id } });
+  return NextResponse.json({ deleted: true });
+}
 
 export async function GET(
   req: NextRequest,
@@ -51,6 +66,25 @@ export async function PATCH(
       return NextResponse.json({ error: "No cover letter to send" }, { status: 400 });
     }
 
+    if (application.applyType === "LINK_OUT") {
+      // User applies manually on the company site — mark as sent immediately
+      const updated = await db.application.update({
+        where: { id },
+        data: {
+          status: "SENT",
+          sentAt: new Date(),
+          ...(coverLetter ? { coverLetter } : {}),
+          ...(emailSubject ? { emailSubject } : {}),
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    // EMAIL type — enqueue for automatic sending
+    if (!mailboxId) {
+      return NextResponse.json({ error: "Select a mailbox to send from" }, { status: 400 });
+    }
+
     const updated = await db.application.update({
       where: { id },
       data: {
@@ -61,14 +95,39 @@ export async function PATCH(
       },
     });
 
-    // Enqueue send
-    if (application.applyType === "EMAIL") {
+    try {
       const queue = getActionExecutorQueue();
       await queue.add(
         "send-email",
         { type: "send-email", applicationId: id, userId },
         { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
       );
+    } catch {
+      // Redis unavailable — still mark approved, user can retry later
+    }
+
+    return NextResponse.json(updated);
+  }
+
+  if (action === "retry") {
+    if (!application.applyEmail) return NextResponse.json({ error: "No apply email" }, { status: 400 });
+    if (!application.coverLetter) return NextResponse.json({ error: "No cover letter" }, { status: 400 });
+    if (!application.mailboxId) return NextResponse.json({ error: "No mailbox selected" }, { status: 400 });
+
+    const updated = await db.application.update({
+      where: { id },
+      data: { status: "APPROVED", failureReason: null },
+    });
+
+    try {
+      const queue = getActionExecutorQueue();
+      await queue.add(
+        "send-email",
+        { type: "send-email", applicationId: id, userId },
+        { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
+      );
+    } catch {
+      // Redis unavailable
     }
 
     return NextResponse.json(updated);

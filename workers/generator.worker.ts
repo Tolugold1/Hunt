@@ -7,12 +7,10 @@
 
 import "dotenv/config";
 import { Worker } from "bullmq";
-import { PrismaClient } from "@prisma/client";
-import { generateCoverLetter, generateSocialPost } from "../src/lib/llm";
+import { db } from "../src/lib/db";
+import { generateCoverLetter, generateSocialPost, scoreJobMatch } from "../src/lib/llm";
 import { QUEUES, getConnection } from "../src/lib/queue";
 import type { GeneratorJobData } from "../src/lib/queue";
-
-const db = new PrismaClient();
 const connection = { ...getConnection(), maxRetriesPerRequest: null as null };
 
 const worker = new Worker<GeneratorJobData>(
@@ -34,6 +32,31 @@ const worker = new Worker<GeneratorJobData>(
         console.log(`Skipping ${applicationId} — status is ${application.status}`);
         return;
       }
+
+      // Score the match BEFORE generating a cover letter — saves tokens on bad matches
+      const matchResult = await scoreJobMatch({
+        jobDescription: application.jobDescription ?? "",
+        resumeText: profile.resumeText,
+        skills: (profile as typeof profile & { skills?: string[] }).skills ?? [],
+        jobTitles: (profile as typeof profile & { jobTitles?: string[] }).jobTitles ?? [],
+      });
+
+      console.log(`[generator] ${applicationId} match score: ${matchResult.score} — ${matchResult.reason}`);
+
+      // Auto-reject if clearly not a fit (score < 0.45)
+      if (matchResult.score < 0.45) {
+        await db.application.update({
+          where: { id: applicationId },
+          data: { status: "REJECTED_BY_USER", matchScore: matchResult.score },
+        });
+        console.log(`✗ Auto-rejected ${applicationId} (${application.jobTitle}) — score too low: ${matchResult.score}`);
+        return;
+      }
+
+      await db.application.update({
+        where: { id: applicationId },
+        data: { matchScore: matchResult.score },
+      });
 
       const coverLetter = await generateCoverLetter({
         jobTitle: application.jobTitle,

@@ -18,40 +18,62 @@ export function getProvider(): LLMProvider {
   return "claude"; // default
 }
 
+// ─── JSON extraction — handles code fences and raw JSON ──────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractJSON(text: string): any | null {
+  // Strategy 1: content between ``` fences (handles ```json ... ```)
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+  // Strategy 2: find the outermost { ... } in the raw text
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch {}
+  }
+  return null;
+}
+
 // ─── Internal: call the active provider ──────────────────────────────────────
 
-export async function complete(prompt: string, opts: { fast?: boolean } = {}): Promise<string> {
+export async function complete(
+  prompt: string,
+  opts: { fast?: boolean; maxTokens?: number; prefill?: string } = {}
+): Promise<string> {
   const provider = getProvider();
+  const maxTokens = opts.maxTokens ?? (opts.fast ? 512 : 1024);
 
   if (provider === "openai") {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const model = opts.fast ? "gpt-4o-mini" : "gpt-4o";
-    const res = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: opts.fast ? 512 : 1024,
-    });
-    return res.choices[0]?.message?.content?.trim() ?? "";
+    const messages: { role: "user" | "assistant"; content: string }[] = [
+      { role: "user", content: prompt },
+    ];
+    if (opts.prefill) messages.push({ role: "assistant", content: opts.prefill });
+    const res = await client.chat.completions.create({ model, messages, max_tokens: maxTokens });
+    const text = res.choices[0]?.message?.content?.trim() ?? "";
+    return opts.prefill ? opts.prefill + text : text;
   }
 
   if (provider === "gemini") {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-    const model = client.getGenerativeModel({
-      model: opts.fast ? "gemini-1.5-flash" : "gemini-1.5-pro",
-    });
+    const model = client.getGenerativeModel({ model: opts.fast ? "gemini-1.5-flash" : "gemini-1.5-pro" });
     const res = await model.generateContent(prompt);
     return res.response.text().trim();
   }
 
-  // Default: Claude (Anthropic)
+  // Default: Claude (Anthropic) — supports assistant prefill to enforce output format
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = opts.fast ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
-  const res = await client.messages.create({
-    model,
-    max_tokens: opts.fast ? 512 : 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
-  return res.content[0].type === "text" ? res.content[0].text.trim() : "";
+  const messages: { role: "user" | "assistant"; content: string }[] = [
+    { role: "user", content: prompt },
+  ];
+  if (opts.prefill) messages.push({ role: "assistant", content: opts.prefill });
+  const res = await client.messages.create({ model, max_tokens: maxTokens, messages });
+  const text = res.content[0].type === "text" ? res.content[0].text.trim() : "";
+  return opts.prefill ? opts.prefill + text : text;
 }
 
 // ─── Public functions (provider-agnostic) ────────────────────────────────────
@@ -64,8 +86,12 @@ export async function parseResume(resumeText: string): Promise<{
   jobTitles?: string[];
   experienceYears?: number;
   location?: string;
+  phone?: string;
+  linkedInUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
 }> {
-  const prompt = `Extract structured information from this resume. Return ONLY valid JSON with these fields:
+  const prompt = `Extract structured information from this resume. Return ONLY valid JSON with these exact fields (use null for missing fields):
 {
   "fullName": string,
   "headline": string,
@@ -73,16 +99,23 @@ export async function parseResume(resumeText: string): Promise<{
   "skills": string[],
   "jobTitles": string[],
   "experienceYears": number,
-  "location": string
+  "location": string,
+  "phone": string,
+  "linkedInUrl": string,
+  "githubUrl": string,
+  "portfolioUrl": string
 }
 
 Resume:
 ${resumeText}`;
 
-  const text = await complete(prompt, { fast: true });
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("Failed to parse resume JSON from LLM");
-  return JSON.parse(match[0]);
+  const raw = await complete(prompt, { fast: true });
+  const parsed = extractJSON(raw);
+  if (!parsed) throw new Error("LLM did not return JSON. Response: " + raw.slice(0, 200));
+  // Ensure array fields are arrays even if LLM returned null
+  if (!Array.isArray(parsed.skills)) parsed.skills = [];
+  if (!Array.isArray(parsed.jobTitles)) parsed.jobTitles = [];
+  return parsed;
 }
 
 export async function generateCoverLetter({
@@ -98,26 +131,51 @@ export async function generateCoverLetter({
   resumeText: string;
   userName: string;
 }): Promise<string> {
-  const prompt = `Write a concise, tailored cover letter email for this job application.
+  const prompt = `You are completing a cover letter for ${userName} applying for "${jobTitle}" at ${company}.
 
-RULES:
-- Write as ${userName}
-- Ground EVERY claim in the resume below — never invent experience
-- Be specific, not generic ("I built X with Y" not "I have experience in")
-- Tone: professional but warm, not stiff
-- Length: 3 short paragraphs max
-- Do NOT include "Dear Hiring Manager" — start with the first paragraph body
-- Do NOT include a sign-off — end after the last paragraph
-- Return ONLY the email body text, nothing else
+OUTPUT RULES:
+- Output ONLY the finished letter — no preamble, no commentary, no markdown.
+- Every bullet point and claim MUST come from the resume. Never invent skills or achievements.
+- Be specific and concrete: "Built X using Y, achieving Z" not "I have experience with Y".
+- The STATIC lines below must appear EXACTLY as written — do not paraphrase them.
+- Replace every <FILL: ...> with the appropriate content drawn from the resume and job description.
+
+════════════ LETTER (output this exactly, replacing <FILL> tags) ════════════
+
+Dear Hiring Manager,
+
+I am writing to express my interest in the ${jobTitle} position at ${company}.
+
+<FILL: 2-3 sentences. State total years of experience, name the core technologies from the resume (be specific — list actual frameworks/languages), and describe the types of systems or products built. Ground every word in the resume.>
+
+In my recent roles, I have:
+
+• <FILL: Most impressive technical achievement — include a metric or scale if the resume has one>
+• <FILL: Second achievement in a different skill area>
+• <FILL: Achievement most relevant to this specific job description>
+• <FILL: Achievement showing breadth — e.g. frontend, DevOps, AI, testing, or leadership>
+• <FILL: Achievement showing collaboration, delivery, or business impact>
+
+<FILL: 2 sentences explaining why ${company} specifically excites you. Reference something concrete from the job description.>
+
+Please find my CV attached for your review. I would welcome the opportunity to discuss how my experience can contribute to ${company}'s continued success.
+
+Thank you for your time and consideration. I look forward to hearing from you.
+
+Kind regards,
+
+${userName}
+
+════════════════════════════════════════════════════════════════════════════════
 
 JOB: ${jobTitle} at ${company}
-DESCRIPTION:
+JOB DESCRIPTION:
 ${jobDescription.slice(0, 2000)}
 
 RESUME:
 ${resumeText.slice(0, 3000)}`;
 
-  return complete(prompt);
+  return complete(prompt, { maxTokens: 1800 });
 }
 
 export async function scoreJobMatch({
@@ -131,19 +189,28 @@ export async function scoreJobMatch({
   skills: string[];
   jobTitles: string[];
 }): Promise<{ score: number; reason: string }> {
-  const prompt = `Rate how well this candidate matches this job. Return ONLY a JSON object: {"score": 0.0, "reason": "brief reason"}
-Score 0.0-1.0 (0 = no match, 1 = perfect match).
+  const prompt = `Score how well this candidate matches this job posting. Return ONLY valid JSON: {"score": 0.0, "reason": "one sentence"}
 
-Candidate skills: ${skills.join(", ")}
-Candidate titles: ${jobTitles.join(", ")}
-Resume excerpt: ${resumeText.slice(0, 1000)}
+Scoring rules (score 0.0–1.0):
+- START at 0.5 (neutral)
+- INCREASE if: candidate's skills/titles directly match what the job requires
+- DECREASE heavily if: the job's PRIMARY required technology stack is absent from candidate's skills
+  (e.g. job requires PHP/Laravel but candidate only knows Node.js/Python → score ≤ 0.3)
+- DECREASE if: seniority mismatch (job wants 8+ years, candidate has 2)
+- INCREASE if: candidate has most required technologies and relevant job titles
+- Score < 0.45 means auto-reject — only score that low if the candidate clearly cannot do this job
 
-Job description: ${jobDescription.slice(0, 1000)}`;
+Candidate skills: ${skills.length ? skills.join(", ") : "unknown"}
+Candidate job titles: ${jobTitles.length ? jobTitles.join(", ") : "unknown"}
+Resume excerpt: ${resumeText.slice(0, 1500)}
 
-  const text = await complete(prompt, { fast: true });
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return { score: 0.5, reason: "Could not score" };
-  return JSON.parse(match[0]);
+Job posting:
+${jobDescription.slice(0, 1500)}`;
+
+  const raw = await complete(prompt, { fast: true });
+  const parsed = extractJSON(raw);
+  if (!parsed) return { score: 0.5, reason: "Could not score" };
+  return parsed as { score: number; reason: string };
 }
 
 export async function generateSocialPost({

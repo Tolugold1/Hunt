@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { ApplicationStatus } from "@prisma/client";
+import DeleteApplicationButton from "./DeleteApplicationButton";
 
 const STATUS_LABELS: Record<ApplicationStatus, { label: string; color: string }> = {
   DRAFT: { label: "Draft", color: "text-yellow-400 bg-yellow-500/10" },
@@ -118,6 +119,7 @@ export default async function ApplicationsPage({
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.color}`}>
                       {s.label}
                     </span>
+                    <DeleteApplicationButton applicationId={app.id} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">

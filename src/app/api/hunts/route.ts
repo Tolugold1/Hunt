@@ -13,6 +13,7 @@ const CreateHuntSchema = z.object({
   salaryMin: z.number().optional(),
   salaryCurrency: z.string().default("USD"),
   sources: z.array(z.string()).default(["email-apply"]),
+  customSources: z.array(z.string()).default([]),
   topics: z.array(z.string()).default([]),
   platforms: z.array(z.string()).default([]),
   tone: z.string().default("professional"),

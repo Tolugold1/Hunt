@@ -77,6 +77,10 @@ model Profile {
   jobTitles       String[]
   experienceYears Int?
   location        String?
+  phone           String?
+  linkedInUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
   remoteOk        Boolean  @default(true)
   salaryCurrency  String?
   salaryMin       Int?
@@ -92,11 +96,14 @@ model Mailbox {
   id           String    @id @default(cuid())
   userId       String
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider     String
+  provider     String    // "gmail-oauth" | "gmail-smtp" | "smtp"
   email        String
-  accessToken  String    @db.Text
+  label        String?   // display name, e.g. "Work Gmail"
+  accessToken  String    @db.Text  // OAuth token OR SMTP app-password (AES encrypted)
   refreshToken String?   @db.Text
   expiresAt    DateTime?
+  smtpHost     String?   // for generic SMTP only; null = use gmail defaults
+  smtpPort     Int?
   isDefault    Boolean   @default(false)
 
   applications Application[]
@@ -125,6 +132,7 @@ model Hunt {
   salaryMin        Int?
   salaryCurrency   String?  @default("USD")
   sources          String[]
+  customSources    String[]  // user-supplied RSS / job-board URLs
   topics           String[]
   platforms        String[]
   tone             String?
@@ -168,9 +176,10 @@ model Application {
   coverLetter  String?   @db.Text
   emailSubject String?
 
-  status       ApplicationStatus @default(DRAFT)
-  sentAt       DateTime?
-  messageId    String?
+  status        ApplicationStatus @default(DRAFT)
+  sentAt        DateTime?
+  messageId     String?
+  failureReason String?   @db.Text
 
   repliedAt    DateTime?
   replySnippet String?   @db.Text

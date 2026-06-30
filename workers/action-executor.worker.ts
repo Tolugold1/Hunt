@@ -6,13 +6,11 @@
 
 import "dotenv/config";
 import { Worker } from "bullmq";
-import { PrismaClient } from "@prisma/client";
+import { db } from "../src/lib/db";
 import { sendJobApplicationEmail } from "../src/lib/gmail";
 import { getResumeBuffer } from "../src/lib/storage";
 import { QUEUES, getConnection } from "../src/lib/queue";
 import type { ActionExecutorJobData } from "../src/lib/queue";
-
-const db = new PrismaClient();
 const connection = { ...getConnection(), maxRetriesPerRequest: null as null };
 
 const worker = new Worker<ActionExecutorJobData>(
@@ -41,14 +39,22 @@ const worker = new Worker<ActionExecutorJobData>(
 
       // Get the resume file from storage
       const resumeBuffer = await getResumeBuffer(profile.resumeUrl);
-      const resumeFilename = `${profile.fullName ?? "resume"}-cv.pdf`.replace(/\s+/g, "-");
+      const resumeFilename = `${(profile.fullName ?? "resume").replace(/\s+/g, "-")}-cv.pdf`;
 
       const { messageId } = await sendJobApplicationEmail({
         mailbox: application.mailbox,
         to: application.applyEmail,
         subject: application.emailSubject ?? `Application for ${application.jobTitle}`,
         body: application.coverLetter,
-        applicantName: profile.fullName ?? "Applicant",
+        contact: {
+          name: profile.fullName ?? "Applicant",
+          email: application.mailbox.email,
+          location: (profile as typeof profile & { location?: string | null }).location,
+          phone: (profile as typeof profile & { phone?: string | null }).phone,
+          linkedInUrl: (profile as typeof profile & { linkedInUrl?: string | null }).linkedInUrl,
+          githubUrl: (profile as typeof profile & { githubUrl?: string | null }).githubUrl,
+          portfolioUrl: (profile as typeof profile & { portfolioUrl?: string | null }).portfolioUrl,
+        },
         resumeBuffer,
         resumeFilename,
       });
@@ -74,7 +80,7 @@ worker.on("failed", async (job, err) => {
     await db.application
       .update({
         where: { id: job.data.applicationId },
-        data: { status: "FAILED" },
+        data: { status: "FAILED", failureReason: err.message },
       })
       .catch(() => {});
   }

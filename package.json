@@ -7,9 +7,10 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "worker:discovery": "tsx workers/job-discovery.worker.ts",
     "worker:generator": "tsx workers/generator.worker.ts",
     "worker:executor": "tsx workers/action-executor.worker.ts",
-    "workers": "concurrently \"npm run worker:generator\" \"npm run worker:executor\"",
+    "workers": "concurrently \"npm run worker:discovery\" \"npm run worker:generator\" \"npm run worker:executor\"",
     "db:push": "prisma db push",
     "db:studio": "prisma studio"
   },

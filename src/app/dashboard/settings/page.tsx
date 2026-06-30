@@ -1,9 +1,13 @@
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { getProvider } from "@/lib/llm";
 import LLMProviderPicker from "./LLMProviderPicker";
+import MailboxManager from "./MailboxManager";
 
 export default async function SettingsPage() {
-  await auth(); // ensures auth guard — redirect handled by middleware
+  const session = await auth();
+  const userId = session!.user!.id!;
+  const mailboxes = await db.mailbox.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
 
   const active = getProvider();
   const providers = [
@@ -67,6 +71,9 @@ export default async function SettingsPage() {
           </p>
         </div>
       </section>
+
+      {/* Mailbox section */}
+      <MailboxManager mailboxes={mailboxes.map((m) => ({ id: m.id, email: m.email, provider: m.provider, label: m.label, isDefault: m.isDefault }))} />
 
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
         <h2 className="font-semibold text-white">Document storage</h2>
