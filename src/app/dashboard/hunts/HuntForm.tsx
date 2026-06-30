@@ -402,9 +402,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
           <div className="flex flex-wrap gap-2">
             {[
               { value: "", label: "Manual only" },
-              { value: "6h", label: "Every 6 hours" },
-              { value: "12h", label: "Twice a day" },
-              { value: "24h", label: "Daily" },
+              { value: "24h", label: "Daily (8am UTC)" },
               { value: "168h", label: "Weekly" },
             ].map((opt) => (
               <button
