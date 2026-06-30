@@ -447,7 +447,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
               <div>
                 <div className="text-sm text-white font-medium">Run immediately after creating</div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  Starts a scan right away. Make sure <code className="text-gray-400 bg-gray-800 px-1 rounded">npm run workers</code> is running in another terminal.
+                  Starts a scan right away. Cover letters are generated automatically — no separate worker needed.
                 </div>
               </div>
             </label>

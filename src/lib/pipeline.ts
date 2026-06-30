@@ -6,6 +6,8 @@
 import { db } from "./db";
 import { generateCoverLetter, scoreJobMatch } from "./llm";
 import { runJobDiscovery } from "./job-discovery";
+import { sendJobApplicationEmail } from "./gmail";
+import { getResumeBuffer } from "./storage";
 import type { Hunt } from "@prisma/client";
 
 /** Generate a cover letter for a single DRAFT application. */
@@ -113,6 +115,57 @@ export function isScheduleDue(cronExpression: string | null, lastRunAt: Date | n
   const intervalMs = parseInt(m[1]) * 60 * 60 * 1000;
   if (!lastRunAt) return true;
   return Date.now() - lastRunAt.getTime() >= intervalMs;
+}
+
+/** Send an APPROVED application's email inline — no BullMQ worker needed. */
+export async function sendApplicationEmailInline(applicationId: string, userId: string): Promise<void> {
+  const [application, profile] = await Promise.all([
+    db.application.findUnique({ where: { id: applicationId }, include: { mailbox: true } }),
+    db.profile.findUnique({ where: { userId } }),
+  ]);
+
+  if (!application) throw new Error(`Application ${applicationId} not found`);
+  if (application.status !== "APPROVED") return;
+  if (!application.applyEmail) throw new Error("No apply email on application");
+  if (!application.coverLetter) throw new Error("No cover letter on application");
+  if (!application.mailbox) throw new Error("No mailbox linked to application");
+  if (!profile?.resumeUrl) throw new Error("No resume on profile");
+
+  const resumeBuffer = await getResumeBuffer(profile.resumeUrl);
+  const resumeFilename = `${(profile.fullName ?? "resume").replace(/\s+/g, "-")}-cv.pdf`;
+
+  const profileExt = profile as typeof profile & {
+    location?: string | null;
+    phone?: string | null;
+    linkedInUrl?: string | null;
+    githubUrl?: string | null;
+    portfolioUrl?: string | null;
+  };
+
+  const { messageId } = await sendJobApplicationEmail({
+    mailbox: application.mailbox,
+    to: application.applyEmail,
+    subject: application.emailSubject ?? `Application for ${application.jobTitle}`,
+    body: application.coverLetter,
+    contact: {
+      name: profile.fullName ?? "Applicant",
+      email: application.mailbox.email,
+      location: profileExt.location,
+      phone: profileExt.phone,
+      linkedInUrl: profileExt.linkedInUrl,
+      githubUrl: profileExt.githubUrl,
+      portfolioUrl: profileExt.portfolioUrl,
+    },
+    resumeBuffer,
+    resumeFilename,
+  });
+
+  await db.application.update({
+    where: { id: applicationId },
+    data: { status: "SENT", sentAt: new Date(), messageId },
+  });
+
+  console.log(`✓ Email sent inline for ${applicationId}`);
 }
 
 /** Human-readable label for a cronExpression. */

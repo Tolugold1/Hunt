@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getActionExecutorQueue } from "@/lib/queue";
+import { sendApplicationEmailInline } from "@/lib/pipeline";
 import { z } from "zod";
+
+export const maxDuration = 60;
 
 const UpdateSchema = z.object({
   action: z.enum(["approve", "reject", "update-draft", "retry"]).optional(),
@@ -103,7 +106,18 @@ export async function PATCH(
         { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
       );
     } catch {
-      // Redis unavailable — still mark approved, user can retry later
+      // Redis unavailable — send inline so the email isn't silently dropped
+      try {
+        await sendApplicationEmailInline(id, userId);
+        const sent = await db.application.findUnique({ where: { id } });
+        return NextResponse.json(sent);
+      } catch (sendErr) {
+        await db.application.update({
+          where: { id },
+          data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
+        });
+        return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
+      }
     }
 
     return NextResponse.json(updated);
@@ -127,7 +141,17 @@ export async function PATCH(
         { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
       );
     } catch {
-      // Redis unavailable
+      try {
+        await sendApplicationEmailInline(id, userId);
+        const sent = await db.application.findUnique({ where: { id } });
+        return NextResponse.json(sent);
+      } catch (sendErr) {
+        await db.application.update({
+          where: { id },
+          data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
+        });
+        return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
+      }
     }
 
     return NextResponse.json(updated);
