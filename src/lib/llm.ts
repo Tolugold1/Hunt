@@ -63,6 +63,30 @@ function extractJSON(text: string): any | null {
   if (start !== -1 && end > start) {
     try { return JSON.parse(text.slice(start, end + 1)); } catch {}
   }
+  // Strategy 3: response was truncated mid-JSON (e.g. hit max_tokens).
+  // Strip any opening ```json fence, then try to repair the dangling object
+  // by trimming to the last complete "key": value pair and closing braces.
+  if (start !== -1) {
+    let body = text.slice(start);
+    // Drop a trailing unterminated "key": value pair, then close any open
+    // brackets/braces in reverse nesting order so JSON.parse succeeds.
+    const lastComma = body.lastIndexOf(",");
+    if (lastComma > 0) body = body.slice(0, lastComma);
+    const stack: string[] = [];
+    let inStr = false, esc = false;
+    for (const ch of body) {
+      if (esc) { esc = false; continue; }
+      if (ch === "\\") { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === "{") stack.push("}");
+      else if (ch === "[") stack.push("]");
+      else if (ch === "}" || ch === "]") stack.pop();
+    }
+    if (inStr) body += '"';
+    while (stack.length) body += stack.pop();
+    try { return JSON.parse(body); } catch {}
+  }
   return null;
 }
 
@@ -181,7 +205,7 @@ export async function parseResume(resumeText: string, provider?: string | null):
 Resume:
 ${resumeText}`;
 
-  const raw = await complete(prompt, { fast: true, provider });
+  const raw = await complete(prompt, { fast: true, maxTokens: 2048, provider });
   const parsed = extractJSON(raw);
   if (!parsed) throw new Error("LLM did not return JSON. Response: " + raw.slice(0, 200));
   // Ensure array fields are arrays even if LLM returned null
