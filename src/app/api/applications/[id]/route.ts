@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getActionExecutorQueue } from "@/lib/queue";
 import { sendApplicationEmailInline, regenerateCoverLetter } from "@/lib/pipeline";
 import { z } from "zod";
 
@@ -88,7 +87,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Select a mailbox to send from" }, { status: 400 });
     }
 
-    const updated = await db.application.update({
+    // Mark APPROVED (sendApplicationEmailInline requires it), then send right away.
+    await db.application.update({
       where: { id },
       data: {
         status: "APPROVED",
@@ -98,29 +98,19 @@ export async function PATCH(
       },
     });
 
+    // Send immediately — never queue. Vercel cron is daily-only and no worker
+    // runs there, so a queued send would never go out. Report the result now.
     try {
-      const queue = getActionExecutorQueue();
-      await queue.add(
-        "send-email",
-        { type: "send-email", applicationId: id, userId },
-        { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
-      );
-    } catch {
-      // Redis unavailable — send inline so the email isn't silently dropped
-      try {
-        await sendApplicationEmailInline(id, userId);
-        const sent = await db.application.findUnique({ where: { id } });
-        return NextResponse.json(sent);
-      } catch (sendErr) {
-        await db.application.update({
-          where: { id },
-          data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
-        });
-        return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
-      }
+      await sendApplicationEmailInline(id, userId);
+      const sent = await db.application.findUnique({ where: { id } });
+      return NextResponse.json(sent);
+    } catch (sendErr) {
+      await db.application.update({
+        where: { id },
+        data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
+      });
+      return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
     }
-
-    return NextResponse.json(updated);
   }
 
   if (action === "retry") {
@@ -128,33 +118,23 @@ export async function PATCH(
     if (!application.coverLetter) return NextResponse.json({ error: "No cover letter" }, { status: 400 });
     if (!application.mailboxId) return NextResponse.json({ error: "No mailbox selected" }, { status: 400 });
 
-    const updated = await db.application.update({
+    await db.application.update({
       where: { id },
       data: { status: "APPROVED", failureReason: null },
     });
 
+    // Send immediately — never queue (see note in the approve action above).
     try {
-      const queue = getActionExecutorQueue();
-      await queue.add(
-        "send-email",
-        { type: "send-email", applicationId: id, userId },
-        { attempts: 3, backoff: { type: "exponential", delay: 10000 } }
-      );
-    } catch {
-      try {
-        await sendApplicationEmailInline(id, userId);
-        const sent = await db.application.findUnique({ where: { id } });
-        return NextResponse.json(sent);
-      } catch (sendErr) {
-        await db.application.update({
-          where: { id },
-          data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
-        });
-        return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
-      }
+      await sendApplicationEmailInline(id, userId);
+      const sent = await db.application.findUnique({ where: { id } });
+      return NextResponse.json(sent);
+    } catch (sendErr) {
+      await db.application.update({
+        where: { id },
+        data: { status: "FAILED", failureReason: sendErr instanceof Error ? sendErr.message : "Send failed" },
+      });
+      return NextResponse.json({ error: sendErr instanceof Error ? sendErr.message : "Send failed" }, { status: 500 });
     }
-
-    return NextResponse.json(updated);
   }
 
   if (action === "regenerate") {

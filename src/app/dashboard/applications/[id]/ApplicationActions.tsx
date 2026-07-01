@@ -26,13 +26,14 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
   const [mailboxId, setMailboxId] = useState(
     application.mailboxId ?? mailboxes[0]?.id ?? ""
   );
-  const [loading, setLoading] = useState<"approve" | "reject" | "save" | null>(null);
+  const [loading, setLoading] = useState<"approve" | "reject" | "save" | "retry" | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
   const [regenerating, setRegenerating] = useState(false);
 
   const isDraft = application.status === "DRAFT";
   const isFailed = application.status === "FAILED";
+  const isApproved = application.status === "APPROVED";
   const isLinkOut = application.applyType === "LINK_OUT";
   const noMailbox = mailboxes.length === 0;
   // Regeneration is allowed until the application is queued/sent.
@@ -64,7 +65,7 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
   }
 
   async function patch(action: "approve" | "reject" | "update-draft" | "retry", extra?: object) {
-    setLoading(action === "update-draft" ? "save" : action as "approve" | "reject" | "save");
+    setLoading(action === "update-draft" ? "save" : action);
     setFeedback(null);
     try {
       const res = await fetch(`/api/applications/${application.id}`, {
@@ -81,8 +82,10 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
         if (isLinkOut) {
           if (application.jobUrl) window.open(application.jobUrl, "_blank", "noopener");
           setFeedback({ msg: "Marked as applied! Job opened in a new tab.", type: "ok" });
+        } else if (data.status === "SENT") {
+          setFeedback({ msg: "Email sent successfully!", type: "ok" });
         } else {
-          setFeedback({ msg: "Re-queued to send! Check back in a moment.", type: "ok" });
+          setFeedback({ msg: "Queued to send.", type: "ok" });
         }
       } else if (action === "reject") {
         setFeedback({ msg: "Skipped.", type: "ok" });
@@ -199,7 +202,7 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
               title={noMailbox ? "Connect a mailbox first" : undefined}
             >
-              {loading === "approve" ? "Queuing..." : "Approve & Send"}
+              {loading === "approve" ? "Sending..." : "Approve & Send"}
             </button>
           )}
           <button
@@ -221,19 +224,43 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
 
       {/* Failed — retry button */}
       {isFailed && !isLinkOut && (
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
           <button
             onClick={() => patch("retry")}
             disabled={!!loading || noMailbox}
             className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
           >
-            {loading === "approve" ? "Re-queuing…" : "Retry send"}
+            {loading === "retry" ? "Sending…" : "Retry send"}
           </button>
           {noMailbox && (
             <span className="text-xs text-yellow-400">
               No mailbox — <a href="/dashboard/settings" className="underline">connect one first</a>
             </span>
           )}
+        </div>
+      )}
+
+      {/* Queued (APPROVED) but not yet sent — let the user push it through inline.
+          Covers items that got stuck in the queue before inline-send existed. */}
+      {isApproved && !isLinkOut && (
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+            <button
+              onClick={() => patch("retry")}
+              disabled={!!loading || noMailbox}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
+            >
+              {loading === "retry" ? "Sending…" : "Send now"}
+            </button>
+            {noMailbox && (
+              <span className="text-xs text-yellow-400">
+                No mailbox — <a href="/dashboard/settings" className="underline">connect one first</a>
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">
+            This application is queued. If it hasn&apos;t sent yet, click <strong>Send now</strong> to send it immediately.
+          </p>
         </div>
       )}
 
