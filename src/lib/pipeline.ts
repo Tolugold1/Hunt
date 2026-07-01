@@ -76,6 +76,55 @@ export async function generateApplicationDraft(applicationId: string, userId: st
   });
 
   console.log(`✓ Cover letter generated for ${applicationId}`);
+
+  // Email-CV jobs go out automatically the moment the letter is ready — no
+  // approval step. FORM / LINK_OUT jobs stay as drafts for the user to review.
+  await maybeAutoSendEmailApplication(applicationId, userId);
+}
+
+/**
+ * Auto-send an EMAIL-type application as soon as its cover letter is ready.
+ * Uses the user's default mailbox (or first connected one). If no mailbox is
+ * connected, it's left as a DRAFT so the user can connect one and send manually.
+ * No-op for FORM / LINK_OUT jobs, which always require manual review.
+ */
+export async function maybeAutoSendEmailApplication(applicationId: string, userId: string): Promise<void> {
+  const application = await db.application.findFirst({ where: { id: applicationId, userId } });
+  if (!application) return;
+  if (application.applyType !== "EMAIL") return; // only email-CV jobs auto-send
+  if (application.status !== "DRAFT") return; // don't touch already sent/approved/rejected
+  if (!application.coverLetter) return; // nothing to send yet
+  if (!application.applyEmail) return; // no destination address
+
+  // Pick a mailbox: one already set on the app, else the user's default, else the oldest.
+  let mailboxId = application.mailboxId;
+  if (!mailboxId) {
+    const mailbox = await db.mailbox.findFirst({
+      where: { userId },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    });
+    if (!mailbox) {
+      console.warn(`[pipeline] ${applicationId}: no mailbox connected — leaving as DRAFT for manual send`);
+      return;
+    }
+    mailboxId = mailbox.id;
+  }
+
+  await db.application.update({
+    where: { id: applicationId },
+    data: { status: "APPROVED", mailboxId },
+  });
+
+  try {
+    await sendApplicationEmailInline(applicationId, userId);
+    console.log(`✓ Auto-sent email application ${applicationId}`);
+  } catch (err) {
+    await db.application.update({
+      where: { id: applicationId },
+      data: { status: "FAILED", failureReason: err instanceof Error ? err.message : "Auto-send failed" },
+    });
+    console.error(`[pipeline] auto-send failed for ${applicationId}:`, err);
+  }
 }
 
 /** Statuses where a cover letter is locked — regeneration is not allowed. */

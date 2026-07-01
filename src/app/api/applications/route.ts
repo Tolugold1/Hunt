@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getGeneratorQueue } from "@/lib/queue";
-import { regenerateCoverLetter } from "@/lib/pipeline";
+import { regenerateCoverLetter, maybeAutoSendEmailApplication } from "@/lib/pipeline";
 import { z } from "zod";
 
 // Cover-letter generation runs inline when no Redis worker is available.
@@ -96,6 +96,10 @@ export async function POST(req: NextRequest) {
   } else {
     await generateInline();
   }
+
+  // Email-CV jobs send automatically once the letter exists (no-op for FORM /
+  // LINK_OUT, or when generation was deferred to a worker / failed).
+  await maybeAutoSendEmailApplication(application.id, userId);
 
   const fresh = await db.application.findUnique({ where: { id: application.id } });
   return NextResponse.json(fresh ?? application, { status: 201 });
