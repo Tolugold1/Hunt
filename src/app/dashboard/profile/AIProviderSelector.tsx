@@ -68,7 +68,7 @@ export default function AIProviderSelector({ current }: { current: string }) {
       </div>
 
       <p className="text-xs text-gray-600">
-        Fallback order: Claude → GPT-4o → Gemini. Make sure the API key for each is set in your environment.
+        Fallback order: GPT-4o → Gemini → Claude. Make sure the API key for each is set in your environment.
       </p>
     </div>
   );

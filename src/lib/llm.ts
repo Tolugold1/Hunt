@@ -18,12 +18,12 @@ export const PROVIDER_LABELS: Record<LLMProvider, string> = {
   gemini: "Gemini (Google)",
 };
 
-const FALLBACK_ORDER: LLMProvider[] = ["claude", "openai", "gemini"];
+const FALLBACK_ORDER: LLMProvider[] = ["openai", "gemini", "claude"];
 
 export function getProvider(override?: string | null): LLMProvider {
   const p = (override ?? process.env.LLM_PROVIDER ?? "").toLowerCase();
   if (p === "openai" || p === "gemini" || p === "claude") return p;
-  return "gemini";
+  return "openai";
 }
 
 function isQuotaError(err: unknown): boolean {
@@ -83,7 +83,7 @@ async function completeWithProvider(
 
   if (provider === "gemini") {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-    const model = client.getGenerativeModel({ model: opts.fast ? "gemini-1.5-flash" : "gemini-1.5-pro" });
+    const model = client.getGenerativeModel({ model: opts.fast ? "gemini-2.0-flash" : "gemini-2.0-flash" });
     const res = await model.generateContent(prompt);
     return res.response.text().trim();
   }

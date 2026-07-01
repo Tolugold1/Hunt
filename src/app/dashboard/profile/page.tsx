@@ -150,7 +150,7 @@ export default async function ProfilePage() {
 
       {/* AI Provider */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <AIProviderSelector current={(profile as { aiProvider?: string } | null)?.aiProvider ?? "claude"} />
+        <AIProviderSelector current={(profile as { aiProvider?: string } | null)?.aiProvider ?? "openai"} />
       </div>
 
       {/* Mailbox */}
