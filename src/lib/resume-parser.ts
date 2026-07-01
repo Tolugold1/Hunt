@@ -9,7 +9,7 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   return data.text;
 }
 
-export async function parseResumeFile(buffer: Buffer, mimeType: string) {
+export async function parseResumeFile(buffer: Buffer, mimeType: string, provider?: string | null) {
   let text: string;
 
   if (mimeType === "application/pdf") {
@@ -28,6 +28,6 @@ export async function parseResumeFile(buffer: Buffer, mimeType: string) {
     throw new Error("Could not extract text — file may be empty or image-only");
   }
 
-  const structured = await parseResumeWithLLM(text);
+  const structured = await parseResumeWithLLM(text, provider);
   return { text, structured };
 }

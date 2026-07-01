@@ -23,7 +23,7 @@ const FALLBACK_ORDER: LLMProvider[] = ["claude", "openai", "gemini"];
 export function getProvider(override?: string | null): LLMProvider {
   const p = (override ?? process.env.LLM_PROVIDER ?? "").toLowerCase();
   if (p === "openai" || p === "gemini" || p === "claude") return p;
-  return "claude";
+  return "gemini";
 }
 
 function isQuotaError(err: unknown): boolean {
@@ -34,7 +34,11 @@ function isQuotaError(err: unknown): boolean {
     msg.includes("429") ||
     msg.includes("insufficient_quota") ||
     msg.includes("credit") ||
-    msg.includes("overloaded")
+    msg.includes("overloaded") ||
+    msg.includes("could not resolve authentication") ||
+    msg.includes("api key") ||
+    msg.includes("unauthorized") ||
+    msg.includes("authentication")
   );
 }
 
@@ -127,7 +131,7 @@ export async function complete(
 
 // ─── Public functions (provider-agnostic) ────────────────────────────────────
 
-export async function parseResume(resumeText: string): Promise<{
+export async function parseResume(resumeText: string, provider?: string | null): Promise<{
   fullName?: string;
   headline?: string;
   summary?: string;
@@ -158,7 +162,7 @@ export async function parseResume(resumeText: string): Promise<{
 Resume:
 ${resumeText}`;
 
-  const raw = await complete(prompt, { fast: true });
+  const raw = await complete(prompt, { fast: true, provider });
   const parsed = extractJSON(raw);
   if (!parsed) throw new Error("LLM did not return JSON. Response: " + raw.slice(0, 200));
   // Ensure array fields are arrays even if LLM returned null

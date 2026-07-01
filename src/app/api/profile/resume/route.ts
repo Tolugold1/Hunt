@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  // Read user's preferred AI provider (may not exist yet on first upload)
+  const existingProfile = await db.profile.findUnique({ where: { userId }, select: { aiProvider: true } });
+  const aiProvider = (existingProfile as { aiProvider?: string } | null)?.aiProvider ?? null;
+
   // Step 1: parse text + LLM extraction
   let text: string;
   let structured: Awaited<ReturnType<typeof parseResumeFile>>["structured"];
   try {
-    const parsed = await parseResumeFile(buffer, file.type);
+    const parsed = await parseResumeFile(buffer, file.type, aiProvider);
     text = parsed.text;
     structured = parsed.structured;
   } catch (err) {
