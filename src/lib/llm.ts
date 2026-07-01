@@ -26,6 +26,12 @@ export function getProvider(override?: string | null): LLMProvider {
   return "openai";
 }
 
+function hasApiKey(provider: LLMProvider): boolean {
+  if (provider === "openai") return !!process.env.OPENAI_API_KEY;
+  if (provider === "gemini") return !!process.env.GEMINI_API_KEY;
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
 function isQuotaError(err: unknown): boolean {
   const msg = String(err instanceof Error ? err.message : err).toLowerCase();
   return (
@@ -107,23 +113,36 @@ export async function complete(
   opts: { fast?: boolean; maxTokens?: number; prefill?: string; provider?: string | null } = {}
 ): Promise<string> {
   const preferred = getProvider(opts.provider);
-  // Build fallback chain: preferred first, then the others in order
+  // Build fallback chain: preferred first, then the others in order.
+  // Only include providers that actually have an API key configured —
+  // otherwise a keyless provider's auth error masks the real failure.
   const chain: LLMProvider[] = [
     preferred,
     ...FALLBACK_ORDER.filter((p) => p !== preferred),
-  ];
+  ].filter(hasApiKey);
+
+  if (chain.length === 0) {
+    throw new Error(
+      `No API key configured for "${preferred}". Set ${
+        preferred === "openai" ? "OPENAI_API_KEY" : preferred === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"
+      } in your environment.`
+    );
+  }
 
   let lastErr: unknown;
   for (const provider of chain) {
     try {
       return await completeWithProvider(provider, prompt, opts);
     } catch (err) {
-      if (isQuotaError(err)) {
-        console.warn(`[llm] ${provider} quota/rate-limit — trying next provider`);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isQuotaError(err) && provider !== chain[chain.length - 1]) {
+        console.warn(`[llm] ${provider} failed (${msg}) — trying next provider`);
         lastErr = err;
         continue;
       }
-      throw err; // non-quota errors bubble up immediately
+      // Last provider in the chain, or a non-quota error — surface it,
+      // naming which provider actually failed so the message isn't misleading.
+      throw new Error(`${PROVIDER_LABELS[provider]} failed: ${msg}`);
     }
   }
   throw lastErr ?? new Error("All LLM providers failed");
