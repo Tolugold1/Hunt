@@ -17,7 +17,7 @@ const CreateHuntSchema = z.object({
   topics: z.array(z.string()).default([]),
   platforms: z.array(z.string()).default([]),
   tone: z.string().default("professional"),
-  cronExpression: z.string().optional(),
+  cronExpression: z.string().nullable().optional(),
   maxActionsPerRun: z.number().default(10),
   approvalRequired: z.boolean().default(true),
 });
