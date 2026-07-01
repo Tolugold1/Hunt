@@ -24,14 +24,14 @@ export default async function HuntsPage() {
         <HuntsToast />
       </Suspense>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">My Hunts</h1>
           <p className="text-gray-400 mt-1 text-sm">A hunt = a saved automation that finds matches and drafts content.</p>
         </div>
         <Link
           href="/dashboard/hunts/new"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors text-center whitespace-nowrap self-start sm:self-auto"
         >
           + New hunt
         </Link>
@@ -77,7 +77,7 @@ export default async function HuntsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 mt-3 ml-4">
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-3 ml-4">
                   <Link
                     href={`/dashboard/applications?huntId=${hunt.id}`}
                     className="text-xs text-gray-500 hover:text-gray-300 transition-colors"

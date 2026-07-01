@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import ApplicationActions from "./ApplicationActions";
+import CoverLetterPending from "./CoverLetterPending";
 
 export default async function ApplicationDetailPage({
   params,
@@ -35,17 +36,17 @@ export default async function ApplicationDetailPage({
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{application.jobTitle}</h1>
-          <p className="text-gray-400">{application.company}</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-white break-words">{application.jobTitle}</h1>
+          <p className="text-gray-400 break-words">{application.company}</p>
         </div>
-        <span className={`text-sm font-semibold mt-1 ${statusColors[application.status] ?? "text-gray-400"}`}>
+        <span className={`text-sm font-semibold mt-1 shrink-0 ${statusColors[application.status] ?? "text-gray-400"}`}>
           {application.status.replace(/_/g, " ")}
         </span>
       </div>
 
       {/* Meta */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 grid grid-cols-2 gap-4 text-sm">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         {application.applyEmail && (
           <div>
             <div className="text-gray-500 text-xs mb-0.5">Apply email</div>
@@ -86,12 +87,7 @@ export default async function ApplicationDetailPage({
 
       {/* Cover letter draft */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-white">Cover letter draft</h2>
-          {!application.coverLetter && application.status === "DRAFT" && (
-            <div className="text-xs text-yellow-400 animate-pulse">Generating...</div>
-          )}
-        </div>
+        <h2 className="font-semibold text-white">Cover letter draft</h2>
 
         {application.coverLetter ? (
           <ApplicationActions
@@ -107,12 +103,14 @@ export default async function ApplicationDetailPage({
             }}
             mailboxes={mailboxes.map((m) => ({ id: m.id, email: m.email }))}
           />
+        ) : application.status === "DRAFT" ? (
+          <CoverLetterPending
+            applicationId={application.id}
+            createdAtMs={application.createdAt.getTime()}
+            failed={!!(application as typeof application & { failureReason?: string | null }).failureReason}
+          />
         ) : (
-          <div className="text-gray-500 text-sm">
-            {application.status === "DRAFT"
-              ? "Cover letter is being generated. Refresh in a moment."
-              : "No cover letter."}
-          </div>
+          <div className="text-gray-500 text-sm">No cover letter.</div>
         )}
       </div>
 

@@ -58,12 +58,12 @@ const socialSteps = [
 
 export default function HowItWorksPage() {
   return (
-    <main className="min-h-screen px-4 py-16">
-      <div className="max-w-2xl mx-auto space-y-16">
+    <main className="min-h-screen px-4 py-10 sm:py-16">
+      <div className="max-w-2xl mx-auto space-y-12 sm:space-y-16">
         <div className="text-center space-y-3">
           <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm">← Back</Link>
-          <h1 className="text-4xl font-bold text-white mt-4">How Hunt works</h1>
-          <p className="text-gray-400 text-lg">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mt-4">How Hunt works</h1>
+          <p className="text-gray-400 text-base sm:text-lg">
             One resume. Zero job boards. Applications sent while you sleep.
           </p>
         </div>
@@ -109,7 +109,7 @@ export default function HowItWorksPage() {
         </section>
 
         {/* Key facts */}
-        <section className="grid grid-cols-2 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { label: "Your data stays yours", desc: "Resume stored in Cloudinary under your account. Never used to train models." },
             { label: "Approval-first by default", desc: "Every hunt starts with manual approval turned on. You decide when to go full-auto." },

@@ -46,6 +46,19 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   try {
+    // Duplicate guard: if an identically-named hunt was created moments ago,
+    // treat this as a double-submit and return the existing one instead of a
+    // second copy. Idempotent, so the client still gets a 2xx + the hunt.
+    const recent = await db.hunt.findFirst({
+      where: {
+        userId: session.user.id,
+        name: parsed.data.name,
+        createdAt: { gte: new Date(Date.now() - 10_000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recent) return NextResponse.json(recent, { status: 200 });
+
     const hunt = await db.hunt.create({
       data: { userId: session.user.id, ...parsed.data },
     });

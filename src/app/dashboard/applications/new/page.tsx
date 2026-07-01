@@ -55,7 +55,7 @@ export default function NewApplicationPage() {
       </div>
 
       <form onSubmit={submit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Job title" required>
             <input
               className="input"

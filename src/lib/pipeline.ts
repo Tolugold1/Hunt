@@ -75,6 +75,58 @@ export async function generateApplicationDraft(applicationId: string, userId: st
   console.log(`✓ Cover letter generated for ${applicationId}`);
 }
 
+/** Statuses where a cover letter is locked — regeneration is not allowed. */
+const SEALED_STATUSES = ["SENT", "APPROVED", "REPLIED", "INTERVIEW"];
+
+/**
+ * User-initiated (re)generation of a cover letter. Unlike generateApplicationDraft,
+ * this never auto-rejects on a low match score and always produces a letter — it's
+ * the recovery path for drafts stuck on "Generating…", failed generations, or when
+ * the user switches AI provider. Blocked once the application has been sent.
+ */
+export async function regenerateCoverLetter(applicationId: string, userId: string): Promise<void> {
+  const [application, profile] = await Promise.all([
+    db.application.findFirst({ where: { id: applicationId, userId } }),
+    db.profile.findUnique({ where: { userId } }),
+  ]);
+
+  if (!application) throw new Error("Application not found");
+  if (!profile?.resumeText) throw new Error("Upload your resume before generating a cover letter.");
+  if (SEALED_STATUSES.includes(application.status)) {
+    throw new Error(`Can't regenerate — this application is already ${application.status.toLowerCase()}.`);
+  }
+
+  const profileWithArrays = profile as typeof profile & { skills?: string[]; jobTitles?: string[]; aiProvider?: string };
+  const provider = profileWithArrays.aiProvider ?? null;
+
+  const match = await scoreJobMatch({
+    jobDescription: application.jobDescription ?? "",
+    resumeText: profile.resumeText,
+    skills: profileWithArrays.skills ?? [],
+    jobTitles: profileWithArrays.jobTitles ?? [],
+    provider,
+  });
+
+  const coverLetter = await generateCoverLetter({
+    jobTitle: application.jobTitle,
+    company: application.company,
+    jobDescription: application.jobDescription ?? "",
+    resumeText: profile.resumeText,
+    userName: profile.fullName ?? "Applicant",
+    provider,
+  });
+
+  const subject =
+    application.emailSubject ??
+    `Application for ${application.jobTitle} — ${profile.fullName ?? ""}`.trim();
+
+  await db.application.update({
+    where: { id: applicationId },
+    // Reset to DRAFT so a previously stuck / failed / rejected item is reviewable again.
+    data: { status: "DRAFT", matchScore: match.score, coverLetter, emailSubject: subject, failureReason: null },
+  });
+}
+
 /** Full hunt pipeline: discovery → cover letters, inline (no queue). */
 export async function runHuntPipelineInline(hunt: Hunt): Promise<{
   fetched: number;

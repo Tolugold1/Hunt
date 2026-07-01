@@ -12,15 +12,15 @@ export default async function Home() {
         <div className="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400 border border-blue-500/30 rounded-full bg-blue-500/10 mb-4">
           Early Access
         </div>
-        <h1 className="text-5xl font-bold text-white leading-tight">
+        <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight">
           Hunt smarter.<br />
           <span className="text-blue-400">Apply faster.</span>
         </h1>
-        <p className="text-lg text-gray-400 max-w-lg mx-auto">
+        <p className="text-base sm:text-lg text-gray-400 max-w-lg mx-auto">
           Upload your resume once. Hunt connects to job boards, drafts tailored cover letters,
           and sends applications from your own mailbox — while you sleep.
         </p>
-        <div className="flex gap-4 justify-center pt-2">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center pt-2">
           <Link
             href="/login"
             className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors"
@@ -34,7 +34,7 @@ export default async function Home() {
             How it works
           </Link>
         </div>
-        <div className="grid grid-cols-3 gap-6 pt-10 text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 pt-10 text-left">
           {[
             { icon: "📄", title: "Resume-grounded drafts", desc: "Cover letters reference your actual experience — nothing fabricated." },
             { icon: "📬", title: "Sends from your mailbox", desc: "Replies go to you. Recruiters see your real email address." },

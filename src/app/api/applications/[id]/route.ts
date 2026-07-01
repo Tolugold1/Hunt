@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getActionExecutorQueue } from "@/lib/queue";
-import { sendApplicationEmailInline } from "@/lib/pipeline";
+import { sendApplicationEmailInline, regenerateCoverLetter } from "@/lib/pipeline";
 import { z } from "zod";
 
 export const maxDuration = 60;
 
 const UpdateSchema = z.object({
-  action: z.enum(["approve", "reject", "update-draft", "retry"]).optional(),
+  action: z.enum(["approve", "reject", "update-draft", "retry", "regenerate"]).optional(),
   coverLetter: z.string().optional(),
   emailSubject: z.string().optional(),
   mailboxId: z.string().optional(),
@@ -154,6 +154,19 @@ export async function PATCH(
       }
     }
 
+    return NextResponse.json(updated);
+  }
+
+  if (action === "regenerate") {
+    try {
+      await regenerateCoverLetter(id, userId);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to regenerate cover letter" },
+        { status: 400 }
+      );
+    }
+    const updated = await db.application.findUnique({ where: { id } });
     return NextResponse.json(updated);
   }
 

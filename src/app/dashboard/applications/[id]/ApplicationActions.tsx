@@ -29,10 +29,39 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
   const [loading, setLoading] = useState<"approve" | "reject" | "save" | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
+  const [regenerating, setRegenerating] = useState(false);
+
   const isDraft = application.status === "DRAFT";
   const isFailed = application.status === "FAILED";
   const isLinkOut = application.applyType === "LINK_OUT";
   const noMailbox = mailboxes.length === 0;
+  // Regeneration is allowed until the application is queued/sent.
+  const canRegenerate = !["SENT", "APPROVED", "REPLIED", "INTERVIEW"].includes(application.status);
+
+  async function regenerate() {
+    setRegenerating(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/applications/${application.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "regenerate" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedback({ msg: data.error ?? "Failed to regenerate.", type: "err" });
+        return;
+      }
+      if (data.coverLetter) setCoverLetter(data.coverLetter);
+      if (data.emailSubject) setSubject(data.emailSubject);
+      setFeedback({ msg: "Cover letter regenerated with your current AI provider.", type: "ok" });
+      router.refresh();
+    } catch {
+      setFeedback({ msg: "Network error — please try again.", type: "err" });
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   async function patch(action: "approve" | "reject" | "update-draft" | "retry", extra?: object) {
     setLoading(action === "update-draft" ? "save" : action as "approve" | "reject" | "save");
@@ -114,7 +143,24 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
 
       {/* Cover letter textarea */}
       <div className="space-y-2">
-        <label className="text-xs text-gray-400">Cover letter</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-gray-400">Cover letter</label>
+          {canRegenerate && (
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={regenerating || !!loading}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 disabled:opacity-50 transition-colors"
+              title="Rewrite this letter using your currently selected AI provider"
+            >
+              <svg className={`w-3.5 h-3.5 ${regenerating ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v6h6M20 20v-6h-6" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20 10a8 8 0 00-14.9-3M4 14a8 8 0 0014.9 3" />
+              </svg>
+              {regenerating ? "Regenerating…" : "Regenerate"}
+            </button>
+          )}
+        </div>
         <textarea
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 min-h-[200px] resize-y font-mono"
           value={coverLetter}
@@ -130,7 +176,7 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
       )}
 
       {isDraft && (
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           {isLinkOut ? (
             <button
               onClick={() => patch("approve")}

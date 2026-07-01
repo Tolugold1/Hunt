@@ -58,7 +58,7 @@ interface Props {
 
 export default function HuntForm({ mode, huntId, initial = {} }: Props) {
   const router = useRouter();
-  const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "error" | "success" | "info" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [runNow, setRunNow] = useState(false);
 
@@ -139,6 +139,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
     if (type === "SOCIAL" && platforms.length === 0) { showError("Select at least one platform"); return; }
 
     setLoading(true);
+    setToast({ message: mode === "create" ? "Creating your hunt…" : "Saving changes…", type: "info" });
 
     const body = {
       name: name.trim(),
@@ -159,33 +160,39 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
       tone: type === "SOCIAL" ? tone : undefined,
     };
 
-    const res = await fetch(
-      mode === "create" ? "/api/hunts" : `/api/hunts/${huntId}`,
-      {
-        method: mode === "create" ? "POST" : "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+    try {
+      const res = await fetch(
+        mode === "create" ? "/api/hunts" : `/api/hunts/${huntId}`,
+        {
+          method: mode === "create" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        showError(typeof data.error === "string" ? data.error : "Failed to save hunt");
+        setLoading(false); // re-enable only on failure
+        return;
       }
-    );
 
-    setLoading(false);
+      const hunt = await res.json();
 
-    if (!res.ok) {
-      const data = await res.json();
-      showError(typeof data.error === "string" ? data.error : "Failed to save hunt");
-      return;
+      // Keep the button disabled through the run request AND the navigation —
+      // re-enabling early is what let users double-submit and create duplicates.
+      if (mode === "create" && runNow) {
+        await fetch(`/api/hunts/${hunt.id}/run`, { method: "POST" });
+        router.push(`/dashboard/hunts?toast=${encodeURIComponent("Hunt created and running!")}&type=success`);
+        return;
+      }
+
+      const msg = mode === "create" ? "Hunt created successfully!" : "Hunt updated!";
+      router.push(`/dashboard/hunts?toast=${encodeURIComponent(msg)}&type=success`);
+    } catch {
+      showError("Network error — please try again.");
+      setLoading(false);
     }
-
-    const hunt = await res.json();
-
-    if (mode === "create" && runNow) {
-      await fetch(`/api/hunts/${hunt.id}/run`, { method: "POST" });
-      router.push(`/dashboard/hunts?toast=${encodeURIComponent("Hunt created and running!")}&type=success`);
-      return;
-    }
-
-    const msg = mode === "create" ? "Hunt created successfully!" : "Hunt updated!";
-    router.push(`/dashboard/hunts?toast=${encodeURIComponent(msg)}&type=success`);
   }
 
   const currencySymbol = CURRENCIES.find((c) => c.code === salaryCurrency)?.symbol ?? "$";
@@ -274,7 +281,7 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
               </div>
 
               {/* Location + Salary */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Location">
                   <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
                     placeholder="Lagos, London, NYC…" className="input" disabled={remoteOnly} />
@@ -454,8 +461,18 @@ export default function HuntForm({ mode, huntId, initial = {} }: Props) {
 
         <div className="flex gap-3 pb-8">
           <button type="submit" disabled={loading}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors">
-            {loading ? (mode === "create" ? "Creating…" : "Saving…") : (mode === "create" ? "Create Hunt" : "Save Changes")}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+            {loading && (
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            )}
+            {loading
+              ? mode === "create"
+                ? runNow ? "Creating & running…" : "Creating…"
+                : "Saving…"
+              : mode === "create" ? "Create Hunt" : "Save Changes"}
           </button>
           <Link href="/dashboard/hunts"
             className="px-6 py-2.5 border border-gray-700 hover:border-gray-500 text-gray-300 font-semibold rounded-lg text-sm transition-colors">

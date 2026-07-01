@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getGeneratorQueue } from "@/lib/queue";
+import { regenerateCoverLetter } from "@/lib/pipeline";
 import { z } from "zod";
+
+// Cover-letter generation runs inline when no Redis worker is available.
+export const maxDuration = 60;
 
 const CreateApplicationSchema = z.object({
   jobTitle: z.string().min(1),
@@ -61,15 +65,38 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Enqueue cover letter generation
-  if (parsed.data.applyType === "EMAIL") {
-    const queue = getGeneratorQueue();
-    await queue.add(
-      "cover-letter",
-      { type: "cover-letter", applicationId: application.id, userId },
-      { attempts: 3, backoff: { type: "exponential", delay: 5000 } }
-    );
+  // Generate the cover letter draft. Prefer the BullMQ worker when Redis is
+  // configured (local dev); otherwise generate inline so the draft doesn't sit
+  // stuck on "Generating…" on Vercel, where no worker runs.
+  async function generateInline() {
+    try {
+      await regenerateCoverLetter(application.id, userId);
+    } catch (err) {
+      console.error("[applications] inline generation failed:", err);
+      // Record why so the UI can offer "Regenerate" immediately instead of
+      // spinning. Stays DRAFT with no cover letter.
+      await db.application.update({
+        where: { id: application.id },
+        data: { failureReason: err instanceof Error ? err.message : "Cover letter generation failed" },
+      }).catch(() => {});
+    }
   }
 
-  return NextResponse.json(application, { status: 201 });
+  if (process.env.REDIS_URL) {
+    try {
+      const queue = getGeneratorQueue();
+      await queue.add(
+        "cover-letter",
+        { type: "cover-letter", applicationId: application.id, userId },
+        { attempts: 3, backoff: { type: "exponential", delay: 5000 } }
+      );
+    } catch {
+      await generateInline();
+    }
+  } else {
+    await generateInline();
+  }
+
+  const fresh = await db.application.findUnique({ where: { id: application.id } });
+  return NextResponse.json(fresh ?? application, { status: 201 });
 }

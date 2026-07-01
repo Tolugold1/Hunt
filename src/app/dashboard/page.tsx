@@ -37,14 +37,14 @@ export default async function DashboardPage() {
       </div>
 
       {!profile?.resumeUrl && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 flex items-center justify-between">
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <div className="text-amber-400 font-semibold text-sm">Resume not uploaded</div>
             <div className="text-amber-300/70 text-xs mt-0.5">Upload your resume to start applying to jobs.</div>
           </div>
           <Link
             href="/dashboard/profile"
-            className="text-xs bg-amber-500 hover:bg-amber-400 text-black font-semibold px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs bg-amber-500 hover:bg-amber-400 text-black font-semibold px-3 py-1.5 rounded-lg transition-colors text-center whitespace-nowrap self-start sm:self-auto"
           >
             Upload resume
           </Link>

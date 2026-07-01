@@ -49,7 +49,7 @@ export default function MailboxManager({ mailboxes: initial }: { mailboxes: Mail
 
   return (
     <section className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold text-white">Email accounts</h2>
           <p className="text-gray-400 text-sm mt-0.5">
@@ -70,9 +70,9 @@ export default function MailboxManager({ mailboxes: initial }: { mailboxes: Mail
       {mailboxes.length > 0 && (
         <div className="space-y-2">
           {mailboxes.map((m) => (
-            <div key={m.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
-              <div>
-                <div className="text-sm text-white font-medium">{m.email}</div>
+            <div key={m.id} className="flex items-center justify-between gap-3 bg-gray-800 rounded-lg px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-sm text-white font-medium truncate">{m.email}</div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {m.label ? `${m.label} · ` : ""}{m.provider === "gmail-smtp" ? "Gmail App Password" : m.provider}
                   {m.isDefault && <span className="ml-2 text-blue-400">default</span>}
@@ -81,7 +81,7 @@ export default function MailboxManager({ mailboxes: initial }: { mailboxes: Mail
               <button
                 onClick={() => removeMailbox(m.id)}
                 disabled={deleting === m.id}
-                className="text-xs text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50 shrink-0"
               >
                 {deleting === m.id ? "Removing…" : "Remove"}
               </button>
