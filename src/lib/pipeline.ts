@@ -4,7 +4,7 @@
  */
 
 import { db } from "./db";
-import { generateCoverLetter, scoreJobMatch } from "./llm";
+import { generateCoverLetter, scoreJobMatch, extractEmailSubject } from "./llm";
 import { runJobDiscovery } from "./job-discovery";
 import { sendJobApplicationEmail } from "./gmail";
 import { getResumeBuffer } from "./storage";
@@ -63,7 +63,10 @@ export async function generateApplicationDraft(applicationId: string, userId: st
     provider,
   });
 
+  // Honour a subject line the posting explicitly mandates; otherwise use the default.
+  const requiredSubject = await extractEmailSubject({ jobDescription: application.jobDescription ?? "", provider });
   const subject =
+    requiredSubject ??
     application.emailSubject ??
     `Application for ${application.jobTitle} — ${profile.fullName ?? ""}`.trim();
 
@@ -116,7 +119,10 @@ export async function regenerateCoverLetter(applicationId: string, userId: strin
     provider,
   });
 
+  // Honour a subject line the posting explicitly mandates; otherwise use the default.
+  const requiredSubject = await extractEmailSubject({ jobDescription: application.jobDescription ?? "", provider });
   const subject =
+    requiredSubject ??
     application.emailSubject ??
     `Application for ${application.jobTitle} — ${profile.fullName ?? ""}`.trim();
 

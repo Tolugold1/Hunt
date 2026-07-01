@@ -229,7 +229,17 @@ export async function generateCoverLetter({
   userName: string;
   provider?: string | null;
 }): Promise<string> {
-  const prompt = `You are completing a cover letter for ${userName} applying for "${jobTitle}" at ${company}.
+  // Job feeds often can't parse a company name and fall back to "Unknown".
+  // Never let that literal leak into the letter — use neutral phrasing instead.
+  const hasCompany = !!company && !/^(unknown|n\/?a|none|null)$/i.test(company.trim());
+  const companyName = hasCompany ? company.trim() : "";
+  const atCompany = hasCompany ? ` at ${companyName}` : "";
+  const excitementTarget = hasCompany
+    ? `why ${companyName} specifically excites you`
+    : `why this specific role and the work described in the posting excite you (do NOT invent or guess a company name — speak about the role and team)`;
+  const successTarget = hasCompany ? `${companyName}'s continued success` : `your team's continued success`;
+
+  const prompt = `You are completing a cover letter for ${userName} applying for "${jobTitle}"${atCompany}.
 
 OUTPUT RULES:
 - Output ONLY the finished letter — no preamble, no commentary, no markdown.
@@ -237,12 +247,13 @@ OUTPUT RULES:
 - Be specific and concrete: "Built X using Y, achieving Z" not "I have experience with Y".
 - The STATIC lines below must appear EXACTLY as written — do not paraphrase them.
 - Replace every <FILL: ...> with the appropriate content drawn from the resume and job description.
+- NEVER write the word "Unknown" or a placeholder for a missing company — omit it and refer to "the role", "the team", or "your organization" instead.
 
 ════════════ LETTER (output this exactly, replacing <FILL> tags) ════════════
 
 Dear Hiring Manager,
 
-I am writing to express my interest in the ${jobTitle} position at ${company}.
+I am writing to express my interest in the ${jobTitle} position${atCompany}.
 
 <FILL: 2-3 sentences. State total years of experience, name the core technologies from the resume (be specific — list actual frameworks/languages), and describe the types of systems or products built. Ground every word in the resume.>
 
@@ -254,9 +265,9 @@ In my recent roles, I have:
 • <FILL: Achievement showing breadth — e.g. frontend, DevOps, AI, testing, or leadership>
 • <FILL: Achievement showing collaboration, delivery, or business impact>
 
-<FILL: 2 sentences explaining why ${company} specifically excites you. Reference something concrete from the job description.>
+<FILL: 2 sentences explaining ${excitementTarget}. Reference something concrete from the job description.>
 
-Please find my CV attached for your review. I would welcome the opportunity to discuss how my experience can contribute to ${company}'s continued success.
+Please find my CV attached for your review. I would welcome the opportunity to discuss how my experience can contribute to ${successTarget}.
 
 Thank you for your time and consideration. I look forward to hearing from you.
 
@@ -266,7 +277,7 @@ ${userName}
 
 ════════════════════════════════════════════════════════════════════════════════
 
-JOB: ${jobTitle} at ${company}
+JOB: ${jobTitle}${atCompany}
 JOB DESCRIPTION:
 ${jobDescription.slice(0, 2000)}
 
@@ -274,6 +285,47 @@ RESUME:
 ${resumeText.slice(0, 3000)}`;
 
   return complete(prompt, { maxTokens: 1800, provider });
+}
+
+/**
+ * Some postings mandate an exact email subject line ("Use 'X' as the subject",
+ * "Email subject: ...", "quote reference REF123"). Return that exact subject if
+ * specified, otherwise null so the caller falls back to the default subject.
+ */
+export async function extractEmailSubject({
+  jobDescription,
+  provider,
+}: {
+  jobDescription: string;
+  provider?: string | null;
+}): Promise<string | null> {
+  const desc = (jobDescription ?? "").trim();
+  if (!desc) return null;
+
+  // Cheap pre-filter: only spend an LLM call when the text hints at a subject
+  // instruction. The vast majority of postings don't, so skip them entirely.
+  if (!/subject|title your email|email.{0,20}titl|use the reference|reference number|ref[:#]|quote (the )?ref/i.test(desc)) {
+    return null;
+  }
+
+  const prompt = `A job posting sometimes tells applicants the EXACT email subject line to use when emailing their application. Examples: "Use 'Backend Developer - REF123' as the subject", "Email subject: Sales Role Q3", "Title your email with the job reference".
+
+Read the job description below. If it EXPLICITLY specifies a required email subject line (or a reference/code that must be in the subject), return that exact subject text. If it does NOT specify one, return an empty string. Do not invent a subject.
+
+Return ONLY valid JSON: {"subject": "<the required subject, or empty string>"}
+
+JOB DESCRIPTION:
+${desc.slice(0, 2000)}`;
+
+  try {
+    const raw = await complete(prompt, { fast: true, provider });
+    const parsed = extractJSON(raw);
+    const subject = parsed && typeof parsed.subject === "string" ? parsed.subject.trim() : "";
+    return subject.length > 0 ? subject : null;
+  } catch {
+    // Subject extraction is best-effort — never block draft generation on it.
+    return null;
+  }
 }
 
 export async function scoreJobMatch({
