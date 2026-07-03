@@ -10,6 +10,7 @@ type HuntType = "JOB" | "SOCIAL";
 const JOB_SOURCES = [
   { id: "email-apply", label: "Remote boards — Remotive, RemoteOK, Arbeitnow, Jobicy" },
   { id: "myjobmag", label: "MyJobMag (Nigeria & Africa)" },
+  { id: "hotnigerianjobs", label: "HotNigerianJobs (Nigeria)" },
   { id: "fuzu", label: "Fuzu (Africa)" },
   { id: "greenhouse", label: "Greenhouse (ATS — coming soon)" },
   { id: "lever", label: "Lever (ATS — coming soon)" },

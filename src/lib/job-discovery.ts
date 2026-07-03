@@ -110,6 +110,18 @@ function extractApplyEmail(description: string): string | undefined {
   return undefined;
 }
 
+// ─── Title parsing (Nigerian boards use "Role at Company - Location") ─────────
+
+function parseTitleCompany(raw: string): { title: string; company?: string; location?: string } {
+  // "Software Engineer at Acme Ltd - Lagos"
+  let m = raw.match(/^(.*?)\s+at\s+(.+?)\s+[-–—]\s+(.+)$/i);
+  if (m) return { title: m[1].trim(), company: m[2].trim(), location: m[3].trim() };
+  // "Software Engineer at Acme Ltd"
+  m = raw.match(/^(.*?)\s+at\s+(.+)$/i);
+  if (m) return { title: m[1].trim(), company: m[2].trim() };
+  return { title: raw };
+}
+
 // ─── RSS parser ───────────────────────────────────────────────────────────────
 
 function parseRSS(xml: string): RawJob[] {
@@ -300,6 +312,45 @@ async function enrichJobPages(jobs: RawJob[], batchSize = 5): Promise<RawJob[]> 
   return enriched;
 }
 
+/**
+ * For the final shortlist, fetch each job's page to pull the full description and
+ * detect an "email your CV to …" apply address. Only touches LINK_OUT jobs whose
+ * listing text is thin (feeds/RSS give teasers) — so already-rich jobs (e.g.
+ * MyJobMag, already enriched) and known-email jobs are skipped.
+ */
+async function enrichCandidates<T extends RawJob>(jobs: T[]): Promise<T[]> {
+  const need = jobs.filter((j) => j.applyType === "LINK_OUT" && j.url && j.description.length < 400);
+  if (!need.length) return jobs;
+  console.log(`[job-discovery] enriching ${need.length} shortlisted page(s) for apply-email detection…`);
+  const enriched = await enrichJobPages(need);
+  const byUrl = new Map(enriched.map((j) => [j.url, j]));
+  return jobs.map((j) => {
+    const e = byUrl.get(j.url);
+    return e ? { ...j, description: e.description, applyType: e.applyType, applyEmail: e.applyEmail } : j;
+  });
+}
+
+async function fetchHotNigerianJobs(): Promise<FetchResult> {
+  // HotNigerianJobs publishes a full RSS feed (~600 latest jobs). We pull it all
+  // and let the local keyword filter narrow it — reliable, no scraping needed.
+  const { ok, text, status } = await rawFetch("https://www.hotnigerianjobs.com/feed/");
+  if (!ok) return { jobs: [], sourceName: "HotNigerianJobs", error: `HotNigerianJobs: HTTP ${status || "timeout"}` };
+
+  const raw = parseRSS(text);
+  // Titles look like "Computer Science Teacher at Greensprings School - Lekki".
+  const jobs = raw.map((j) => {
+    const p = parseTitleCompany(j.title);
+    return {
+      ...j,
+      title: p.title,
+      company: j.company && j.company !== "Unknown" ? j.company : (p.company ?? "Unknown"),
+      location: p.location ?? j.location,
+    };
+  });
+  console.log(`[job-discovery] HotNigerianJobs: RSS → ${jobs.length}`);
+  return { jobs, sourceName: "HotNigerianJobs", preFiltered: false };
+}
+
 async function fetchMyJobMag(keywords: string[]): Promise<FetchResult> {
   const q = (keywords[0] ?? "").replace(/\s+/g, "+");
   const url = `https://www.myjobmag.com/search/jobs?q=${q}&q=${q}`;
@@ -420,10 +471,8 @@ const KNOWN_BOARDS: Record<string, BoardFn> = {
     url: `https://ngcareers.com/jobs?keywords=${encodeURIComponent(kw.join(" "))}`,
     preFiltered: true,
   }),
-  "hotnigerianjobs.com": (kw) => ({
-    url: `https://www.hotnigerianjobs.com/hotjobs/search/?q=${encodeURIComponent(kw.join(" "))}`,
-    preFiltered: true,
-  }),
+  // Full RSS feed (~600 latest jobs); local keyword filter narrows it.
+  "hotnigerianjobs.com": () => ({ url: "https://www.hotnigerianjobs.com/feed/", preFiltered: false }),
   "careersngr.com": (kw) => ({
     url: `https://www.careersngr.com/jobs/?s=${encodeURIComponent(kw.join(" "))}`,
     preFiltered: true,
@@ -434,10 +483,8 @@ const KNOWN_BOARDS: Record<string, BoardFn> = {
   }),
 
   // African / freelance boards
-  "fuzu.com": (kw) => ({
-    url: `https://www.fuzu.com/jobs?q=${encodeURIComponent(kw[0] ?? "")}`,
-    preFiltered: true,
-  }),
+  // SPA — /jobs redirects to country listings; the Nigeria page is server-rendered.
+  "fuzu.com": () => ({ url: "https://www.fuzu.com/nigeria/job", preFiltered: false }),
   "peepuu.com": (kw) => ({
     url: `https://www.peepuu.com/jobs?q=${encodeURIComponent(kw[0] ?? "")}`,
     preFiltered: true,
@@ -582,9 +629,12 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
     userFetches.push(fetchMyJobMag(hunt.keywords));
   }
 
+  if (hunt.sources.includes("hotnigerianjobs")) {
+    userFetches.push(fetchHotNigerianJobs());
+  }
+
   if (hunt.sources.includes("fuzu")) {
-    const q = encodeURIComponent(hunt.keywords[0] ?? "");
-    userFetches.push(fetchSource(`https://www.fuzu.com/jobs?q=${q}`, "Fuzu"));
+    userFetches.push(fetchSource("https://www.fuzu.com/nigeria/job", "Fuzu"));
   }
 
   for (const url of hunt.customSources ?? []) {
@@ -636,7 +686,8 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
   console.log(`[job-discovery] quota: ${quota} (maxActionsPerRun=${hunt.maxActionsPerRun}, pending=${pendingCount})`);
 
   const fresh = filtered.filter((j) => !existingUrls.has(j.url));
-  const toCreate = fresh.slice(0, quota);
+  // Enrich the shortlist to detect email-apply jobs before creating them.
+  const toCreate = await enrichCandidates(fresh.slice(0, quota));
 
   let created = 0;
   let applicationIds: string[] = [];
