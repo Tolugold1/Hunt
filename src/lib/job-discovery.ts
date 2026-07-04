@@ -330,6 +330,95 @@ async function enrichCandidates<T extends RawJob>(jobs: T[]): Promise<T[]> {
   });
 }
 
+// ─── X / Twitter (official API v2 recent search) ─────────────────────────────
+
+/** Build a display title centred on the first matched keyword so it reads as a role. */
+function tweetTitle(text: string, keywords: string[]): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  const lower = one.toLowerCase();
+  for (const k of keywords) {
+    const i = lower.indexOf(k.toLowerCase());
+    if (i !== -1) {
+      const start = Math.max(0, i - 30);
+      return one.slice(start, start + 90).trim();
+    }
+  }
+  return one.slice(0, 80);
+}
+
+interface XTweet {
+  id: string;
+  text: string;
+  author_id?: string;
+  entities?: { urls?: Array<{ expanded_url?: string; display_url?: string }> };
+}
+interface XUser { id: string; name?: string; username?: string }
+
+async function fetchXJobs(keywords: string[]): Promise<FetchResult> {
+  const token = process.env.X_BEARER_TOKEN;
+  if (!token) {
+    return { jobs: [], sourceName: "X", error: "X: set X_BEARER_TOKEN in your environment to enable X/Twitter search" };
+  }
+
+  const kw = keywords.slice(0, 5).filter(Boolean);
+  const kwClause = kw.length ? `(${kw.map((k) => `"${k}"`).join(" OR ")}) ` : "";
+  // Recent-search query is capped at 512 chars.
+  const query = `${kwClause}(hiring OR "now hiring" OR vacancy OR "job opening" OR "send your cv" OR apply) -is:retweet -is:reply lang:en`.slice(0, 500);
+  const url =
+    `https://api.twitter.com/2/tweets/search/recent?query=${encodeURIComponent(query)}` +
+    `&max_results=50&tweet.fields=entities&expansions=author_id&user.fields=name,username`;
+
+  let res: Response;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+    clearTimeout(timer);
+  } catch {
+    return { jobs: [], sourceName: "X", error: "X: request failed or timed out" };
+  }
+
+  if (!res.ok) {
+    const detail = res.status === 401 ? "invalid token" : res.status === 429 ? "rate limit / quota" : `HTTP ${res.status}`;
+    return { jobs: [], sourceName: "X", error: `X: ${detail}` };
+  }
+
+  let data: { data?: XTweet[]; includes?: { users?: XUser[] } };
+  try {
+    data = JSON.parse(await res.text());
+  } catch {
+    return { jobs: [], sourceName: "X", error: "X: could not parse API response" };
+  }
+
+  const tweets = data.data ?? [];
+  const users = new Map((data.includes?.users ?? []).map((u) => [u.id, u]));
+
+  const jobs: RawJob[] = tweets.map((t) => {
+    const text = t.text.replace(/\s+/g, " ").trim();
+    const author = t.author_id ? users.get(t.author_id) : undefined;
+    const handle = author?.username ? `@${author.username}` : "";
+    // First non-x.com link = likely the apply link.
+    const applyLink = (t.entities?.urls ?? [])
+      .map((u) => u.expanded_url)
+      .find((u): u is string => !!u && !/(?:^https?:\/\/)?(?:www\.)?(?:x|twitter)\.com/i.test(u));
+    const permalink = author?.username ? `https://x.com/${author.username}/status/${t.id}` : `https://x.com/i/status/${t.id}`;
+    const applyEmail = extractApplyEmail(text);
+    const description = `${text}${applyLink ? `\n\n🔗 ${applyLink}` : ""}${handle ? `\n\n— via ${handle} on X` : ""}`;
+    return {
+      title: tweetTitle(text, keywords),
+      company: author?.name || handle || "Unknown",
+      location: /remote/i.test(text) ? "Remote" : "Unknown",
+      url: applyLink ?? permalink,
+      description,
+      applyType: (applyEmail ? "EMAIL" : "LINK_OUT") as "EMAIL" | "LINK_OUT",
+      applyEmail,
+    };
+  });
+
+  console.log(`[job-discovery] X: recent search → ${jobs.length} tweets`);
+  return { jobs, sourceName: "X", preFiltered: false };
+}
+
 async function fetchHotNigerianJobs(): Promise<FetchResult> {
   // HotNigerianJobs publishes a full RSS feed (~600 latest jobs). We pull it all
   // and let the local keyword filter narrow it — reliable, no scraping needed.
@@ -631,6 +720,10 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
 
   if (hunt.sources.includes("hotnigerianjobs")) {
     userFetches.push(fetchHotNigerianJobs());
+  }
+
+  if (hunt.sources.includes("twitter")) {
+    userFetches.push(fetchXJobs(hunt.keywords));
   }
 
   if (hunt.sources.includes("fuzu")) {

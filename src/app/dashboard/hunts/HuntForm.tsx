@@ -12,6 +12,7 @@ const JOB_SOURCES = [
   { id: "myjobmag", label: "MyJobMag (Nigeria & Africa)" },
   { id: "hotnigerianjobs", label: "HotNigerianJobs (Nigeria)" },
   { id: "fuzu", label: "Fuzu (Africa)" },
+  { id: "twitter", label: "X / Twitter (recent posts — needs API token)" },
   { id: "greenhouse", label: "Greenhouse (ATS — coming soon)" },
   { id: "lever", label: "Lever (ATS — coming soon)" },
   { id: "workable", label: "Workable (ATS — coming soon)" },
