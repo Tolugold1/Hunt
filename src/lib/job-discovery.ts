@@ -379,8 +379,18 @@ async function fetchXJobs(keywords: string[]): Promise<FetchResult> {
   }
 
   if (!res.ok) {
-    const detail = res.status === 401 ? "invalid token" : res.status === 429 ? "rate limit / quota" : `HTTP ${res.status}`;
-    return { jobs: [], sourceName: "X", error: `X: ${detail}` };
+    // Surface X's own reason (e.g. "client-not-enrolled") — it pinpoints the fix.
+    let apiDetail = "";
+    try {
+      const body = JSON.parse(await res.text()) as { detail?: string; title?: string; reason?: string };
+      apiDetail = body.detail || body.title || body.reason || "";
+    } catch {}
+    const hint =
+      res.status === 401 ? "invalid or expired Bearer token"
+      : res.status === 403 ? "app not entitled — attach the app to a Project in the X developer portal and ensure your plan allows search reads"
+      : res.status === 429 ? "rate limit / monthly read cap reached"
+      : `HTTP ${res.status}`;
+    return { jobs: [], sourceName: "X", error: `X: ${hint}${apiDetail ? ` — ${apiDetail.slice(0, 200)}` : ""}` };
   }
 
   let data: { data?: XTweet[]; includes?: { users?: XUser[] } };

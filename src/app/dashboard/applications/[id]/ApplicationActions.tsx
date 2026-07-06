@@ -13,6 +13,7 @@ type Props = {
     applyType: string;
     jobUrl: string | null;
     mailboxId: string | null;
+    tailoredResume: string | null;
   };
   mailboxes: { id: string; email: string }[];
 };
@@ -26,6 +27,7 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
   const [mailboxId, setMailboxId] = useState(
     application.mailboxId ?? mailboxes[0]?.id ?? ""
   );
+  const [tailoredResume, setTailoredResume] = useState(application.tailoredResume ?? "");
   const [loading, setLoading] = useState<"approve" | "reject" | "save" | "retry" | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
@@ -55,7 +57,8 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
       }
       if (data.coverLetter) setCoverLetter(data.coverLetter);
       if (data.emailSubject) setSubject(data.emailSubject);
-      setFeedback({ msg: "Cover letter regenerated with your current AI provider.", type: "ok" });
+      if (data.tailoredResume) setTailoredResume(data.tailoredResume);
+      setFeedback({ msg: "Cover letter and tailored résumé regenerated with your current AI provider.", type: "ok" });
       router.refresh();
     } catch {
       setFeedback({ msg: "Network error — please try again.", type: "err" });
@@ -71,7 +74,7 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
       const res = await fetch(`/api/applications/${application.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, coverLetter, emailSubject: subject, mailboxId, ...extra }),
+        body: JSON.stringify({ action, coverLetter, emailSubject: subject, mailboxId, tailoredResume, ...extra }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -170,6 +173,42 @@ export default function ApplicationActions({ application, mailboxes }: Props) {
           onChange={(e) => setCoverLetter(e.target.value)}
           readOnly={!isDraft && !isFailed}
         />
+      </div>
+
+      {/* Tailored résumé — review + download */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-gray-400">
+            {tailoredResume ? "Tailored résumé (review)" : "Résumé"}
+          </label>
+          <a
+            href={`/api/applications/${application.id}/resume`}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors"
+            title="Download the résumé that will be used for this job"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
+            </svg>
+            Download PDF
+          </a>
+        </div>
+        {tailoredResume ? (
+          <>
+            <p className="text-xs text-gray-500">
+              {isLinkOut
+                ? "Tailored to this job — download it and upload on the company site."
+                : "This tailored résumé will be attached to your application email. Edit below if needed."}
+            </p>
+            <textarea
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 min-h-[180px] resize-y font-mono"
+              value={tailoredResume}
+              onChange={(e) => setTailoredResume(e.target.value)}
+              readOnly={!isDraft && !isFailed}
+            />
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">Your original résumé will be attached.</p>
+        )}
       </div>
 
       {feedback && (

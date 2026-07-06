@@ -173,9 +173,10 @@ model Application {
   source          String?
   jobExternalId   String?
 
-  applyType    ApplyType @default(EMAIL)
-  coverLetter  String?   @db.Text
-  emailSubject String?
+  applyType     ApplyType @default(EMAIL)
+  coverLetter   String?   @db.Text
+  emailSubject  String?
+  tailoredResume String?  @db.Text
 
   status        ApplicationStatus @default(DRAFT)
   sentAt        DateTime?

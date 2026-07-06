@@ -100,6 +100,7 @@ export default async function ApplicationDetailPage({
               applyType: application.applyType,
               jobUrl: application.jobUrl,
               mailboxId: application.mailboxId,
+              tailoredResume: (application as typeof application & { tailoredResume?: string | null }).tailoredResume ?? null,
             }}
             mailboxes={mailboxes.map((m) => ({ id: m.id, email: m.email }))}
           />

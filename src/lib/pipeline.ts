@@ -4,10 +4,11 @@
  */
 
 import { db } from "./db";
-import { generateCoverLetter, scoreJobMatch, extractEmailSubject } from "./llm";
+import { generateCoverLetter, scoreJobMatch, extractEmailSubject, tailorResume } from "./llm";
 import { runJobDiscovery } from "./job-discovery";
 import { sendJobApplicationEmail } from "./gmail";
 import { getResumeBuffer } from "./storage";
+import { renderResumePdf } from "./resume-pdf";
 import type { Hunt } from "@prisma/client";
 
 /** Generate a cover letter for a single DRAFT application. */
@@ -70,12 +71,27 @@ export async function generateApplicationDraft(applicationId: string, userId: st
     application.emailSubject ??
     `Application for ${application.jobTitle} — ${profile.fullName ?? ""}`.trim();
 
+  // Tailor the résumé to this specific job (truthful — reorders/reweights only).
+  let tailoredResume: string | null = null;
+  try {
+    tailoredResume = await tailorResume({
+      jobTitle: application.jobTitle,
+      company: application.company,
+      jobDescription: application.jobDescription ?? "",
+      resumeText: profile.resumeText,
+      userName: profile.fullName ?? "Applicant",
+      provider,
+    });
+  } catch (err) {
+    console.error(`[pipeline] résumé tailoring failed for ${applicationId}:`, err);
+  }
+
   await db.application.update({
     where: { id: applicationId },
-    data: { coverLetter, emailSubject: subject },
+    data: { coverLetter, emailSubject: subject, ...(tailoredResume ? { tailoredResume } : {}) },
   });
 
-  console.log(`✓ Cover letter generated for ${applicationId}`);
+  console.log(`✓ Cover letter${tailoredResume ? " + tailored résumé" : ""} generated for ${applicationId}`);
 
   // Email-CV jobs go out automatically the moment the letter is ready — no
   // approval step. FORM / LINK_OUT jobs stay as drafts for the user to review.
@@ -175,10 +191,31 @@ export async function regenerateCoverLetter(applicationId: string, userId: strin
     application.emailSubject ??
     `Application for ${application.jobTitle} — ${profile.fullName ?? ""}`.trim();
 
+  let tailoredResume: string | null = null;
+  try {
+    tailoredResume = await tailorResume({
+      jobTitle: application.jobTitle,
+      company: application.company,
+      jobDescription: application.jobDescription ?? "",
+      resumeText: profile.resumeText,
+      userName: profile.fullName ?? "Applicant",
+      provider,
+    });
+  } catch (err) {
+    console.error(`[pipeline] résumé tailoring failed for ${applicationId}:`, err);
+  }
+
   await db.application.update({
     where: { id: applicationId },
     // Reset to DRAFT so a previously stuck / failed / rejected item is reviewable again.
-    data: { status: "DRAFT", matchScore: match.score, coverLetter, emailSubject: subject, failureReason: null },
+    data: {
+      status: "DRAFT",
+      matchScore: match.score,
+      coverLetter,
+      emailSubject: subject,
+      failureReason: null,
+      ...(tailoredResume ? { tailoredResume } : {}),
+    },
   });
 }
 
@@ -241,7 +278,11 @@ export async function sendApplicationEmailInline(applicationId: string, userId: 
   if (!application.mailbox) throw new Error("No mailbox linked to application");
   if (!profile?.resumeUrl) throw new Error("No resume on profile");
 
-  const resumeBuffer = await getResumeBuffer(profile.resumeUrl);
+  // Prefer the job-tailored résumé (rendered to PDF) over the original upload.
+  const appWithResume = application as typeof application & { tailoredResume?: string | null };
+  const resumeBuffer = appWithResume.tailoredResume
+    ? await renderResumePdf(appWithResume.tailoredResume, profile.fullName ?? undefined)
+    : await getResumeBuffer(profile.resumeUrl);
   const resumeFilename = `${(profile.fullName ?? "resume").replace(/\s+/g, "-")}-cv.pdf`;
 
   const profileExt = profile as typeof profile & {

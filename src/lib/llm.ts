@@ -328,6 +328,53 @@ ${desc.slice(0, 2000)}`;
   }
 }
 
+export async function tailorResume({
+  jobTitle,
+  company,
+  jobDescription,
+  resumeText,
+  userName,
+  provider,
+}: {
+  jobTitle: string;
+  company: string;
+  jobDescription: string;
+  resumeText: string;
+  userName: string;
+  provider?: string | null;
+}): Promise<string> {
+  const prompt = `Rewrite ${userName}'s résumé to target the role "${jobTitle}" at ${company}.
+
+STRICT RULES:
+- Use ONLY facts, skills, employers, dates, and achievements that appear in the ORIGINAL résumé. NEVER invent or embellish anything. This must remain truthful.
+- You MAY reorder, reword, and re-emphasise: surface the experience and skills most relevant to the job description first, and phrase bullets using the job's terminology where it genuinely matches the candidate's real experience.
+- Keep it ATS-friendly plain text. Output ONLY the résumé — no commentary, no markdown tables.
+
+FORMAT (use these exact section markers):
+${userName}
+<one line: headline · location · email · phone if present in the original>
+
+# Summary
+<2-3 sentence summary tuned to this role, grounded in the résumé>
+
+# Skills
+- <group the most relevant skills first; only skills from the original>
+
+# Experience
+<For each real role from the original: "Title, Company (dates)" on its own line, then 2-4 bullets starting with "- ", emphasising achievements relevant to ${jobTitle}. Keep real metrics.>
+
+# Education
+<from the original, if present>
+
+TARGET JOB DESCRIPTION:
+${jobDescription.slice(0, 2000)}
+
+ORIGINAL RÉSUMÉ:
+${resumeText.slice(0, 4000)}`;
+
+  return complete(prompt, { maxTokens: 2000, provider });
+}
+
 export async function scoreJobMatch({
   jobDescription,
   resumeText,

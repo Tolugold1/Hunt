@@ -11,6 +11,7 @@ const UpdateSchema = z.object({
   coverLetter: z.string().optional(),
   emailSubject: z.string().optional(),
   mailboxId: z.string().optional(),
+  tailoredResume: z.string().optional(),
 });
 
 export async function DELETE(
@@ -61,7 +62,7 @@ export async function PATCH(
   const parsed = UpdateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { action, coverLetter, emailSubject, mailboxId } = parsed.data;
+  const { action, coverLetter, emailSubject, mailboxId, tailoredResume } = parsed.data;
 
   if (action === "approve") {
     if (!application.coverLetter && !coverLetter) {
@@ -165,6 +166,7 @@ export async function PATCH(
         ...(coverLetter ? { coverLetter } : {}),
         ...(emailSubject ? { emailSubject } : {}),
         ...(mailboxId ? { mailboxId } : {}),
+        ...(tailoredResume !== undefined ? { tailoredResume } : {}),
       },
     });
     return NextResponse.json(updated);
