@@ -343,36 +343,63 @@ export async function tailorResume({
   userName: string;
   provider?: string | null;
 }): Promise<string> {
-  const prompt = `Rewrite ${userName}'s résumé to target the role "${jobTitle}" at ${company}.
+  const hasCompany = !!company && !/^(unknown|n\/?a|none|null)$/i.test(company.trim());
+  const atCompany = hasCompany ? ` at ${company.trim()}` : "";
 
-STRICT RULES:
-- Use ONLY facts, skills, employers, dates, and achievements that appear in the ORIGINAL résumé. NEVER invent or embellish anything. This must remain truthful.
-- You MAY reorder, reword, and re-emphasise: surface the experience and skills most relevant to the job description first, and phrase bullets using the job's terminology where it genuinely matches the candidate's real experience.
-- Keep it ATS-friendly plain text. Output ONLY the résumé — no commentary, no markdown tables.
+  // Count the original's bullets so we can demand an exact, countable target back —
+  // vague "keep depth" wording lets the model summarize; a hard number doesn't.
+  const bulletCount = (resumeText.match(/^\s*[-•▪*·]\s+/gm) ?? []).length;
+  const bulletMandate = bulletCount >= 3
+    ? `\n\nBULLET COUNT MANDATE: The original résumé contains EXACTLY ${bulletCount} achievement bullet points across all roles. Your tailored résumé MUST contain all ${bulletCount} — every single one rewritten and kept, none removed or merged. Before finishing, count your bullets; if you have fewer than ${bulletCount}, you dropped some — add them back.`
+    : "";
 
-FORMAT (use these exact section markers):
+  const prompt = `You are an expert résumé writer and ATS-optimization specialist. Rewrite ${userName}'s FULL résumé so it is precisely tailored to the target role below — while staying 100% truthful. This is a REWRITE-and-REORDER task, NOT a summarization task — the result must be as long and detailed as the original.${bulletMandate}
+
+═══════════ NON-NEGOTIABLE RULES ═══════════
+1. TRUTH ONLY. Use only the employers, job titles, date ranges, education, certifications, skills, tools, and achievements that appear in the ORIGINAL résumé. NEVER invent, inflate, or add anything — no fabricated metrics, no tools or skills the candidate hasn't actually used.
+2. KEEP EVERYTHING — this is critical. Include EVERY job/role from the original with its exact employer and date range. Do NOT drop, merge, or omit any position, no matter how old. Preserve ALL education, certifications, and languages. The tailored résumé must be at least as complete and detailed as the original — never shorter or thinner.
+3. PRESERVE DEPTH. Retain EVERY achievement bullet from each role — if a role has 6 bullets in the original, the tailored version of that role must also have 6 bullets. You may reword and reorder them, but never drop, merge, or summarize bullets away. Keep every real metric and number.
+4. TAILOR by reordering and rewording — not by cutting:
+   - Lead each role with the bullets most relevant to "${jobTitle}".
+   - Reword bullets to mirror the job description's exact terminology WHERE the candidate genuinely did that work.
+   - Rewrite the professional summary to target this specific role and seniority.
+5. ATS-OPTIMIZE. Weave in the exact keywords, skills, and technologies named in the job description that the candidate legitimately has (per the résumé). List the most job-relevant skills first.
+6. Preserve the candidate's name and full contact line (phone, email, LinkedIn, GitHub, portfolio) EXACTLY as they appear at the top of the original résumé.
+
+═══════════ OUTPUT FORMAT ═══════════
+Plain text only — no markdown bold, no tables, no columns, no commentary before or after. Use these exact section markers:
+
 ${userName}
-<one line: headline · location · email · phone if present in the original>
+<contact line, verbatim from the original: location | phone | email | LinkedIn | GitHub | Portfolio>
 
-# Summary
-<2-3 sentence summary tuned to this role, grounded in the résumé>
+# PROFESSIONAL SUMMARY
+<3-4 sentences tuned to "${jobTitle}", grounded strictly in the résumé>
 
-# Skills
-- <group the most relevant skills first; only skills from the original>
+# CORE SKILLS
+<categorized lines exactly like the original (e.g. "Languages: ...", "Backend: ...", "Frontend: ...", "Databases: ...", "Cloud & DevOps: ...", "AI/ML: ..."), most job-relevant category and items first — only real skills>
 
-# Experience
-<For each real role from the original: "Title, Company (dates)" on its own line, then 2-4 bullets starting with "- ", emphasising achievements relevant to ${jobTitle}. Keep real metrics.>
+# PROFESSIONAL EXPERIENCE
+<For EVERY role in the original, reverse-chronological. Each role as:
+Job Title | Employer | Date range
+- achievement bullet (reworded/reordered, truthful, keep metrics)
+- ... keep ALL of that role's real bullets ...
+Leave a blank line between roles.>
 
-# Education
+# EDUCATION
+<every entry from the original>
+
+# CERTIFICATIONS & LANGUAGES
 <from the original, if present>
 
-TARGET JOB DESCRIPTION:
-${jobDescription.slice(0, 2000)}
+═══════════ TARGET ROLE ═══════════
+JOB TITLE: ${jobTitle}${atCompany}
+JOB DESCRIPTION:
+${jobDescription.slice(0, 4000)}
 
-ORIGINAL RÉSUMÉ:
-${resumeText.slice(0, 4000)}`;
+═══════════ ORIGINAL RÉSUMÉ (tailor THIS — keep every role, date, and detail) ═══════════
+${resumeText.slice(0, 16000)}`;
 
-  return complete(prompt, { maxTokens: 2000, provider });
+  return complete(prompt, { maxTokens: 4000, provider });
 }
 
 export async function scoreJobMatch({

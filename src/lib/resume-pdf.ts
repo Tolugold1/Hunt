@@ -120,9 +120,18 @@ export async function renderResumePdf(text: string, candidateName?: string): Pro
       continue;
     }
 
+    // Role header line: "Job Title | Employer | Dates" → bold so positions stand out.
+    if (line.includes(" | ")) {
+      y -= 3;
+      draw(line, { f: bold, size: SIZE_BODY + 0.5 });
+      continue;
+    }
+
     draw(line);
   }
 
-  const bytes = await doc.save();
+  // useObjectStreams:false → a classic xref table that every PDF/ATS parser can
+  // read (pdf-lib's default object streams break older extractors and some ATS).
+  const bytes = await doc.save({ useObjectStreams: false });
   return Buffer.from(bytes);
 }
