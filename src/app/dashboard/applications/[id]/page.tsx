@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import ApplicationActions from "./ApplicationActions";
 import CoverLetterPending from "./CoverLetterPending";
+import ApplyFieldSheet, { type ApplyField } from "./ApplyFieldSheet";
 
 export default async function ApplicationDetailPage({
   params,
@@ -13,15 +14,47 @@ export default async function ApplicationDetailPage({
   const userId = session!.user!.id!;
   const { id } = await params;
 
-  const [application, mailboxes] = await Promise.all([
+  const [application, mailboxes, profile] = await Promise.all([
     db.application.findFirst({
       where: { id, userId },
       include: { mailbox: true },
     }),
     db.mailbox.findMany({ where: { userId } }),
+    db.profile.findUnique({ where: { userId } }),
   ]);
 
   if (!application) notFound();
+
+  // Prefilled fields for form-apply jobs — the common questions application forms ask.
+  const p = profile as (typeof profile & {
+    phone?: string | null;
+    linkedInUrl?: string | null;
+    githubUrl?: string | null;
+    portfolioUrl?: string | null;
+    salaryMin?: number | null;
+    salaryCurrency?: string | null;
+  }) | null;
+  const applyFields: ApplyField[] = [];
+  const pushField = (label: string, value: string | number | null | undefined, multiline = false) => {
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      applyFields.push({ label, value: String(value).trim(), multiline });
+    }
+  };
+  pushField("Full name", p?.fullName);
+  pushField("Email", session!.user!.email ?? null);
+  pushField("Phone", p?.phone);
+  pushField("Location", p?.location);
+  pushField("Current title", p?.headline ?? p?.jobTitles?.[0]);
+  pushField("Years of experience", p?.experienceYears != null ? `${p.experienceYears}` : null);
+  pushField("LinkedIn", p?.linkedInUrl);
+  pushField("GitHub", p?.githubUrl);
+  pushField("Portfolio", p?.portfolioUrl);
+  pushField("Key skills", p?.skills?.length ? p.skills.join(", ") : null);
+  if (p?.salaryMin) pushField("Salary expectation", `${p.salaryCurrency ?? "USD"} ${p.salaryMin.toLocaleString()}+`);
+  pushField("Cover letter / Why you're a fit", application.coverLetter, true);
+  pushField("Professional summary", p?.summary, true);
+
+  const isFormApply = application.applyType !== "EMAIL";
 
   const statusColors: Record<string, string> = {
     DRAFT: "text-yellow-400",
@@ -114,6 +147,29 @@ export default async function ApplicationDetailPage({
           <div className="text-gray-500 text-sm">No cover letter.</div>
         )}
       </div>
+
+      {/* Quick-apply field sheet — only for jobs you apply to via a form/site */}
+      {isFormApply && applyFields.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+          {application.jobUrl && (
+            <a
+              href={application.jobUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Open the application form
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          )}
+          <ApplyFieldSheet fields={applyFields} />
+          <p className="text-xs text-gray-600 pt-1 border-t border-gray-800">
+            Tip: download your tailored résumé above and upload it as the CV/résumé on the form.
+          </p>
+        </div>
+      )}
 
       {/* Job description */}
       {application.jobDescription && (
