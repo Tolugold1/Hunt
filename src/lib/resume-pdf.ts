@@ -81,6 +81,8 @@ export async function renderResumePdf(text: string, candidateName?: string): Pro
 
   const lines = text.replace(/\r/g, "").split("\n");
   let nameDrawn = false;
+  let subtitleDrawn = false;
+  let sawHeading = false;
 
   // Optional name banner from the candidate name if the résumé text doesn't lead with one.
   if (candidateName && !lines[0]?.trim()) {
@@ -94,12 +96,26 @@ export async function renderResumePdf(text: string, candidateName?: string): Pro
 
     // First non-empty line, no explicit heading marker → treat as the name.
     if (!nameDrawn && i === 0 && !/^[#\-•*]/.test(line)) {
-      draw(line.replace(/^#+\s*/, ""), { f: bold, size: SIZE_NAME, gapAfter: 4 });
+      draw(line.replace(/^#+\s*/, ""), { f: bold, size: SIZE_NAME, gapAfter: 2 });
       nameDrawn = true;
       continue;
     }
 
+    // The line right after the name (before any section, not a contact line) is
+    // the professional headline / target job title → render as a subtitle.
+    if (
+      nameDrawn && !subtitleDrawn && !sawHeading &&
+      !/^\s*[-•*]\s+/.test(line) &&
+      !/^#{1,3}\s+/.test(line) &&
+      !/[|@]/.test(line) && !/https?:\/\//i.test(line) && !/linkedin|github|portfolio/i.test(line)
+    ) {
+      draw(line, { f: bold, size: SIZE_HEADING + 1, color: rgb(0.25, 0.32, 0.5), gapAfter: 4 });
+      subtitleDrawn = true;
+      continue;
+    }
+
     if (/^#{1,3}\s+/.test(line) || /^[A-Z][A-Z \/&]{3,}$/.test(line.trim())) {
+      sawHeading = true;
       const heading = line.replace(/^#{1,3}\s+/, "").trim();
       y -= 4;
       ensureSpace(SIZE_HEADING * LEADING + 6);
@@ -120,8 +136,9 @@ export async function renderResumePdf(text: string, candidateName?: string): Pro
       continue;
     }
 
-    // Role header line: "Job Title | Employer | Dates" → bold so positions stand out.
-    if (line.includes(" | ")) {
+    // Role header line: "Job Title | Employer | Dates" → bold so positions stand
+    // out. Exclude contact lines (email / links) which also use " | " separators.
+    if (line.includes(" | ") && !/[@]|https?:\/\/|linkedin|github|portfolio/i.test(line)) {
       y -= 3;
       draw(line, { f: bold, size: SIZE_BODY + 0.5 });
       continue;

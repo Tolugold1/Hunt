@@ -365,11 +365,13 @@ export async function tailorResume({
    - Rewrite the professional summary to target this specific role and seniority.
 5. ATS-OPTIMIZE. Weave in the exact keywords, skills, and technologies named in the job description that the candidate legitimately has (per the résumé). List the most job-relevant skills first.
 6. Preserve the candidate's name and full contact line (phone, email, LinkedIn, GitHub, portfolio) EXACTLY as they appear at the top of the original résumé.
+7. HEADLINE: directly under the name, add a single professional title line set to the target role "${jobTitle}" — this is the résumé's headline, so it matches the job being applied for. Keep it honest to the candidate's real level (if the target title's seniority isn't supported by the résumé, use the candidate's closest genuine title instead).
 
 ═══════════ OUTPUT FORMAT ═══════════
 Plain text only — no markdown bold, no tables, no columns, no commentary before or after. Use these exact section markers:
 
 ${userName}
+${jobTitle}
 <contact line, verbatim from the original: location | phone | email | LinkedIn | GitHub | Portfolio>
 
 # PROFESSIONAL SUMMARY
