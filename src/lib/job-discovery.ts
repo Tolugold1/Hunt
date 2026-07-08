@@ -290,6 +290,47 @@ async function fetchArbeitnow(jobTitle: string): Promise<FetchResult> {
   }
 }
 
+// ─── Remote or Nothing (public JSON API, remote-only board) ──────────────────
+
+async function fetchRemoteOrNothing(keywords: string[]): Promise<FetchResult> {
+  const q = encodeURIComponent(keywords.join(" ").trim());
+  const url = `https://remoteornothing.com/api/jobs?q=${q}&limit=100`;
+  const { ok, text, status } = await rawFetch(url);
+  if (!ok) return { jobs: [], sourceName: "RemoteOrNothing", error: `RemoteOrNothing: HTTP ${status || "timeout"}` };
+  try {
+    const data = JSON.parse(text) as {
+      data?: Array<{
+        title?: string;
+        description?: string;
+        apply_url?: string;
+        company_name?: string;
+        location_type?: string;
+        timezone?: string;
+      }>;
+    };
+    const jobs: RawJob[] = (data.data ?? [])
+      .filter((j) => j.title && j.apply_url)
+      .map((j) => {
+        const desc = stripHtml(j.description ?? "").slice(0, 3000);
+        const applyEmail = extractApplyEmail(desc);
+        const locType = (j.location_type ?? "").toLowerCase();
+        return {
+          title: j.title!,
+          company: j.company_name || "Unknown",
+          location: locType && locType !== "remote" ? (j.location_type as string) : "Remote",
+          url: j.apply_url!,
+          description: desc,
+          applyType: (applyEmail ? "EMAIL" : "LINK_OUT") as "EMAIL" | "LINK_OUT",
+          applyEmail,
+        };
+      });
+    console.log(`[job-discovery] RemoteOrNothing: API → ${jobs.length}`);
+    return { jobs, sourceName: "RemoteOrNothing", preFiltered: true };
+  } catch (e) {
+    return { jobs: [], sourceName: "RemoteOrNothing", error: `RemoteOrNothing: parse error — ${e}` };
+  }
+}
+
 // ─── Adzuna (official keyed API — broad global coverage incl. LinkedIn-sourced) ─
 
 // Map common location text → Adzuna country code (Adzuna has no Nigeria board).
@@ -807,6 +848,10 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
 
   if (hunt.sources.includes("adzuna")) {
     userFetches.push(fetchAdzuna(hunt.keywords, hunt.location ?? undefined));
+  }
+
+  if (hunt.sources.includes("remoteornothing")) {
+    userFetches.push(fetchRemoteOrNothing(hunt.keywords));
   }
 
   if (hunt.sources.includes("fuzu")) {
