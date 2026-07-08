@@ -290,6 +290,75 @@ async function fetchArbeitnow(jobTitle: string): Promise<FetchResult> {
   }
 }
 
+// ─── Adzuna (official keyed API — broad global coverage incl. LinkedIn-sourced) ─
+
+// Map common location text → Adzuna country code (Adzuna has no Nigeria board).
+const ADZUNA_COUNTRIES: Record<string, string> = {
+  "united kingdom": "gb", uk: "gb", england: "gb", london: "gb",
+  "united states": "us", usa: "us", us: "us", america: "us",
+  canada: "ca", australia: "au", germany: "de", france: "fr",
+  netherlands: "nl", india: "in", "south africa": "za", singapore: "sg",
+};
+
+function adzunaCountry(location?: string): string {
+  const loc = (location ?? "").toLowerCase().trim();
+  for (const [k, v] of Object.entries(ADZUNA_COUNTRIES)) {
+    if (loc.includes(k)) return v;
+  }
+  return (process.env.ADZUNA_COUNTRY ?? "gb").toLowerCase();
+}
+
+async function fetchAdzuna(keywords: string[], location?: string): Promise<FetchResult> {
+  const appId = process.env.ADZUNA_APP_ID;
+  const appKey = process.env.ADZUNA_APP_KEY;
+  if (!appId || !appKey) {
+    return { jobs: [], sourceName: "Adzuna", error: "Adzuna: set ADZUNA_APP_ID and ADZUNA_APP_KEY to enable this source" };
+  }
+
+  const country = adzunaCountry(location);
+  const what = encodeURIComponent(keywords.join(" ").trim() || "developer");
+  const url =
+    `https://api.adzuna.com/v1/api/jobs/${country}/search/1` +
+    `?app_id=${appId}&app_key=${appKey}&results_per_page=50&what=${what}&content-type=application/json`;
+
+  const { ok, text, status } = await rawFetch(url);
+  if (!ok) {
+    const detail = status === 401 || status === 403 ? "invalid app id/key" : `HTTP ${status || "timeout"}`;
+    return { jobs: [], sourceName: "Adzuna", error: `Adzuna: ${detail}` };
+  }
+
+  try {
+    const data = JSON.parse(text) as {
+      results?: Array<{
+        title?: string;
+        description?: string;
+        redirect_url?: string;
+        company?: { display_name?: string };
+        location?: { display_name?: string };
+      }>;
+    };
+    const jobs: RawJob[] = (data.results ?? [])
+      .filter((r) => r.title && r.redirect_url)
+      .map((r) => {
+        const desc = stripHtml(r.description ?? "").slice(0, 3000);
+        const applyEmail = extractApplyEmail(desc);
+        return {
+          title: stripHtml(r.title!),
+          company: r.company?.display_name || "Unknown",
+          location: r.location?.display_name || "Unknown",
+          url: r.redirect_url!,
+          description: desc,
+          applyType: (applyEmail ? "EMAIL" : "LINK_OUT") as "EMAIL" | "LINK_OUT",
+          applyEmail,
+        };
+      });
+    console.log(`[job-discovery] Adzuna (${country}): API → ${jobs.length}`);
+    return { jobs, sourceName: "Adzuna", preFiltered: true };
+  } catch (e) {
+    return { jobs: [], sourceName: "Adzuna", error: `Adzuna: parse error — ${e}` };
+  }
+}
+
 /** Fetch individual job pages in parallel batches to extract description + apply email. */
 async function enrichJobPages(jobs: RawJob[], batchSize = 5): Promise<RawJob[]> {
   const enriched: RawJob[] = [];
@@ -734,6 +803,10 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
 
   if (hunt.sources.includes("twitter")) {
     userFetches.push(fetchXJobs(hunt.keywords));
+  }
+
+  if (hunt.sources.includes("adzuna")) {
+    userFetches.push(fetchAdzuna(hunt.keywords, hunt.location ?? undefined));
   }
 
   if (hunt.sources.includes("fuzu")) {

@@ -13,6 +13,7 @@ const JOB_SOURCES = [
   { id: "hotnigerianjobs", label: "HotNigerianJobs (Nigeria)" },
   { id: "fuzu", label: "Fuzu (Africa)" },
   { id: "twitter", label: "X / Twitter (recent posts — needs API token)" },
+  { id: "adzuna", label: "Adzuna (global aggregator — incl. LinkedIn-sourced jobs)" },
   { id: "greenhouse", label: "Greenhouse (ATS — coming soon)" },
   { id: "lever", label: "Lever (ATS — coming soon)" },
   { id: "workable", label: "Workable (ATS — coming soon)" },
