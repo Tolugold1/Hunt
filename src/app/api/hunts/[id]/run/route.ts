@@ -47,33 +47,43 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
-  // ── Step 2: Try BullMQ first, fall back to inline generation ─────────────
+  // ── Step 2: Generate cover letters ───────────────────────────────────────
+  // Use the BullMQ worker ONLY when Redis is configured. Without it (e.g. Vercel)
+  // enqueuing hangs against a non-existent localhost Redis and the request never
+  // returns — leaving the Run button spinning forever. Generate inline instead.
   let coverLettersQueued = 0;
-  let queueError: string | null = null;
+  const queueError: string | null = null;
 
-  try {
-    const queue = getGeneratorQueue();
-    await Promise.all(
-      discovery.applicationIds.map((applicationId) =>
-        queue.add(
-          "cover-letter",
-          { type: "cover-letter", applicationId, userId: hunt.userId },
-          { attempts: 3, backoff: { type: "exponential", delay: 3000 } }
-        )
-      )
-    );
-    coverLettersQueued = discovery.applicationIds.length;
-  } catch {
-    // Redis not running — generate inline (works on Vercel without workers)
-    console.log("[hunt/run] BullMQ unavailable — generating cover letters inline");
-    for (const applicationId of discovery.applicationIds) {
+  async function generateInline() {
+    console.log("[hunt/run] generating cover letters inline");
+    for (const applicationId of discovery!.applicationIds) {
       try {
-        await generateApplicationDraft(applicationId, hunt.userId);
+        await generateApplicationDraft(applicationId, hunt!.userId);
         coverLettersQueued++;
       } catch (err) {
         console.error(`[hunt/run] inline cover letter failed for ${applicationId}:`, err);
       }
     }
+  }
+
+  if (process.env.REDIS_URL) {
+    try {
+      const queue = getGeneratorQueue();
+      await Promise.all(
+        discovery.applicationIds.map((applicationId) =>
+          queue.add(
+            "cover-letter",
+            { type: "cover-letter", applicationId, userId: hunt.userId },
+            { attempts: 3, backoff: { type: "exponential", delay: 3000 } }
+          )
+        )
+      );
+      coverLettersQueued = discovery.applicationIds.length;
+    } catch {
+      await generateInline();
+    }
+  } else {
+    await generateInline();
   }
 
   return NextResponse.json({

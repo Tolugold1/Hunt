@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface RunResult {
@@ -13,9 +14,14 @@ interface RunResult {
   coverLettersQueued: number;
 }
 
-type RunState = "idle" | "running" | "done" | "error";
+type RunState = "idle" | "running" | "done" | "error" | "slow";
+
+// Safety net: if the request hasn't returned by now, stop spinning and tell the
+// user their jobs are being created in the background (discovery already ran).
+const RUN_TIMEOUT_MS = 100_000;
 
 export default function RunHuntButton({ huntId, huntName }: { huntId: string; huntName: string }) {
+  const router = useRouter();
   const [state, setState] = useState<RunState>("idle");
   const [result, setResult] = useState<RunResult | null>(null);
   const [errMsg, setErrMsg] = useState("");
@@ -24,8 +30,10 @@ export default function RunHuntButton({ huntId, huntName }: { huntId: string; hu
     setState("running");
     setResult(null);
     setErrMsg("");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RUN_TIMEOUT_MS);
     try {
-      const res = await fetch(`/api/hunts/${huntId}/run`, { method: "POST" });
+      const res = await fetch(`/api/hunts/${huntId}/run`, { method: "POST", signal: controller.signal });
       const data = await res.json();
       if (!res.ok) {
         setErrMsg(data.error ?? "Failed to run hunt");
@@ -34,15 +42,25 @@ export default function RunHuntButton({ huntId, huntName }: { huntId: string; hu
       }
       setResult(data as RunResult);
       setState("done");
-    } catch {
-      setErrMsg("Network error — check your connection.");
-      setState("error");
+      router.refresh(); // update the hunt card's last-run / counts
+    } catch (err) {
+      // Aborted by our timeout, or the serverless function ran past its limit —
+      // jobs were already created during discovery, so guide the user to them.
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setState("slow");
+      } else {
+        setErrMsg("Network error — check your connection.");
+        setState("error");
+      }
+      router.refresh();
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   if (state === "running") {
     return (
-      <div className="flex flex-col items-end gap-1 text-right">
+      <div className="flex flex-col items-start sm:items-end gap-1 text-left sm:text-right">
         <span className="text-xs text-blue-400 flex items-center gap-1.5">
           <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
@@ -57,7 +75,7 @@ export default function RunHuntButton({ huntId, huntName }: { huntId: string; hu
 
   if (state === "done" && result) {
     return (
-      <div className="flex flex-col items-end gap-1.5 text-right max-w-[200px]">
+      <div className="flex flex-col items-start sm:items-end gap-1.5 text-left sm:text-right max-w-full sm:max-w-[200px]">
         <div className="flex items-center gap-1 text-xs text-green-400 font-medium">
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -115,9 +133,31 @@ export default function RunHuntButton({ huntId, huntName }: { huntId: string; hu
     );
   }
 
+  if (state === "slow") {
+    return (
+      <div className="flex flex-col sm:items-end gap-1 text-left sm:text-right max-w-full sm:max-w-[220px]">
+        <span className="text-xs text-blue-400 font-medium">Still processing…</span>
+        <p className="text-xs text-gray-500 leading-snug">
+          Your jobs are being created. Open Applications to see them as they finish.
+        </p>
+        <div className="flex items-center gap-3 mt-0.5">
+          <Link
+            href={`/dashboard/applications?huntId=${huntId}`}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            View drafts →
+          </Link>
+          <button onClick={run} className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
+            Run again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (state === "error") {
     return (
-      <div className="flex flex-col items-end gap-1 text-right max-w-[220px]">
+      <div className="flex flex-col sm:items-end gap-1 text-left sm:text-right max-w-full sm:max-w-[220px]">
         <span className="text-xs text-red-400 font-medium">Run failed</span>
         <p className="text-xs text-gray-500 leading-snug">{errMsg}</p>
         <button onClick={run} className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-0.5">
