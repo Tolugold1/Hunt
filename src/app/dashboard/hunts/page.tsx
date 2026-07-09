@@ -51,21 +51,21 @@ export default async function HuntsPage() {
             const itemCount = hunt.type === "JOB" ? hunt._count.applications : hunt._count.socialPosts;
             return (
               <div key={hunt.id} className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${hunt.isActive ? "bg-green-500" : "bg-gray-600"}`} />
                       <div className="font-medium text-white truncate">{hunt.name}</div>
                       <span className="text-xs text-gray-600 uppercase tracking-wide shrink-0">{hunt.type}</span>
                     </div>
-                    <div className="text-gray-500 text-sm mt-1 ml-4 truncate">
+                    <div className="text-gray-500 text-sm mt-1 ml-4 line-clamp-2 sm:truncate">
                       {hunt.type === "JOB"
                         ? hunt.keywords.slice(0, 4).join(", ") + (hunt.keywords.length > 4 ? ` +${hunt.keywords.length - 4} more` : "")
                         : `Topics: ${hunt.topics.join(", ")}`}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 mt-0.5">
+                  <div className="flex items-center gap-4 shrink-0 sm:mt-0.5 ml-4 sm:ml-0">
                     <DeleteHuntButton huntId={hunt.id} huntName={hunt.name} />
                     <Link
                       href={`/dashboard/hunts/${hunt.id}/edit`}

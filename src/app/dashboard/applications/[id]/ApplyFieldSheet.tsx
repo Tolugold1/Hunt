@@ -40,14 +40,26 @@ export default function ApplyFieldSheet({ fields }: { fields: ApplyField[] }) {
 
       <div className="border border-gray-800 rounded-lg divide-y divide-gray-800">
         {fields.map((f, i) => (
-          <div key={f.label} className="flex items-start gap-3 p-3">
-            <div className="w-28 sm:w-36 shrink-0 text-xs text-gray-500 pt-0.5">{f.label}</div>
-            <div className={`flex-1 min-w-0 text-sm text-gray-200 ${f.multiline ? "whitespace-pre-wrap break-words" : "truncate"}`}>
+          <div key={f.label} className="p-3 space-y-1.5 sm:space-y-0 sm:flex sm:items-start sm:gap-3">
+            {/* Label row — on mobile the Copy button sits here, next to the label */}
+            <div className="flex items-center justify-between gap-2 sm:w-36 sm:shrink-0">
+              <span className="text-xs text-gray-500 uppercase tracking-wide sm:normal-case sm:tracking-normal sm:pt-0.5">
+                {f.label}
+              </span>
+              <button
+                onClick={() => copy(f.value, i)}
+                className="sm:hidden shrink-0 text-xs px-2 py-1 text-gray-400 hover:text-blue-400 border border-gray-700 rounded transition-colors"
+              >
+                {copied === i ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+            <div className={`flex-1 min-w-0 text-sm text-gray-200 ${f.multiline ? "whitespace-pre-wrap break-words" : "break-words sm:truncate"}`}>
               {f.value}
             </div>
+            {/* Copy button for desktop (right of the value) */}
             <button
               onClick={() => copy(f.value, i)}
-              className="shrink-0 text-xs px-2 py-1 text-gray-400 hover:text-blue-400 border border-gray-700 hover:border-blue-500/50 rounded transition-colors"
+              className="hidden sm:block shrink-0 text-xs px-2 py-1 text-gray-400 hover:text-blue-400 border border-gray-700 hover:border-blue-500/50 rounded transition-colors"
             >
               {copied === i ? "Copied ✓" : "Copy"}
             </button>
