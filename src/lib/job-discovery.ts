@@ -72,24 +72,29 @@ const PRONOUN = "(?:your|their|all|qualified candidates['']?)\\s*";
 // "to:" or "at:" or just "to" / "at" followed by whitespace
 const TO = "(?:to|at):?\\s+";
 
-const EMAIL_APPLY_PATTERNS = [
-  // "send their CV and Application to: email"
-  new RegExp(`send\\s+${PRONOUN}?${CV_WORDS}(?:\\s+and\\s+${CV_WORDS})?\\s+${TO}(${EMAIL_RE})`, "i"),
-  // "email their CV to: email"
-  new RegExp(`email\\s+${PRONOUN}?${CV_WORDS}\\s+${TO}(${EMAIL_RE})`, "i"),
-  // "apply via email ... email@domain"
-  new RegExp(`apply\\s+(?:via|by|through)\\s+email[^.]{0,80}?(${EMAIL_RE})`, "i"),
-  // "submit their CV to: email"
-  new RegExp(`submit\\s+${PRONOUN}?${CV_WORDS}\\s+${TO}(${EMAIL_RE})`, "i"),
-  // "forward their CV to: email"
-  new RegExp(`forward\\s+${PRONOUN}?${CV_WORDS}\\s+${TO}(${EMAIL_RE})`, "i"),
-  // "applications should be sent/emailed to email"
-  new RegExp(`applications?\\s+(?:should\\s+be\\s+)?(?:sent|emailed|forwarded)\\s+${TO}(${EMAIL_RE})`, "i"),
-  // "contact us at email with your CV"
-  new RegExp(`(?:email|contact)\\s+us\\s+(?:at|on)\\s+(${EMAIL_RE})\\s+with\\s+${PRONOUN}?${CV_WORDS}`, "i"),
-  // "CV and Application to: email@domain" (MyJobMag style)
-  new RegExp(`${CV_WORDS}[^.]{0,100}?${TO}(${EMAIL_RE})`, "i"),
+// "to" / "at" / ":" — the connector between "send your CV" and the address.
+// Handles "to email", "to: email", "at email", and "CV: email" (colon, no verb-to).
+const TO_OR_COLON = `(?:${TO}|:\\s*)`;
+
+// STRONG, explicit "email your CV to X" signals. The post literally names an address
+// to send the CV to, so these WIN even when the post ALSO mentions a form/website —
+// recruiters routinely list both ("send CV to x@y and fill our form").
+const STRONG_EMAIL_PATTERNS = [
+  // send / email / submit / forward [your] CV [and cover letter] to|: email
+  new RegExp(`(?:send|e-?mail|submit|forward)\\s+${PRONOUN}?${CV_WORDS}(?:\\s+and\\s+${CV_WORDS})?\\s*${TO_OR_COLON}(${EMAIL_RE})`, "i"),
+  // apply via/by/through email ... email
+  new RegExp(`apply\\s+(?:via|by|through)\\s+e-?mail[^.]{0,80}?(${EMAIL_RE})`, "i"),
+  // applications should be sent / emailed / forwarded to email
+  new RegExp(`applications?\\s+(?:should\\s+be\\s+)?(?:sent|e-?mailed|forwarded)\\s+${TO}(${EMAIL_RE})`, "i"),
+  // email / contact us at email ... with your CV
+  new RegExp(`(?:e-?mail|contact)\\s+us\\s+(?:at|on)\\s+(${EMAIL_RE})[^.]{0,40}?with\\s+${PRONOUN}?${CV_WORDS}`, "i"),
+  // CV / resume / application to|: email  (CV word immediately followed by to|colon + address)
+  new RegExp(`${CV_WORDS}\\s*${TO_OR_COLON}(${EMAIL_RE})`, "i"),
 ];
+
+// WEAK: a CV word within ~100 chars of "to: <email>". Ambiguous (the address might be
+// for questions, not submission), so only trust it when the post is NOT a form apply.
+const WEAK_EMAIL_PATTERN = new RegExp(`${CV_WORDS}[^.]{0,100}?${TO}(${EMAIL_RE})`, "i");
 
 const FORM_APPLY_SIGNALS = [
   // Only block when it's clearly a form/online portal — NOT "apply now" (that's just a button)
@@ -100,14 +105,15 @@ const FORM_APPLY_SIGNALS = [
 ];
 
 function extractApplyEmail(description: string): string | undefined {
-  // First check if it's a form-apply job — if so, don't extract email even if one exists
-  if (FORM_APPLY_SIGNALS.some((re) => re.test(description))) return undefined;
-  // Only return an email if the description explicitly asks to email the CV
-  for (const pattern of EMAIL_APPLY_PATTERNS) {
+  // An explicit "send your CV to <email>" always wins — even alongside a form mention.
+  for (const pattern of STRONG_EMAIL_PATTERNS) {
     const m = description.match(pattern);
     if (m?.[1]) return m[1];
   }
-  return undefined;
+  // Otherwise only trust a loose CV-near-email match when it's not a form-apply post.
+  if (FORM_APPLY_SIGNALS.some((re) => re.test(description))) return undefined;
+  const m = description.match(WEAK_EMAIL_PATTERN);
+  return m?.[1];
 }
 
 // ─── Title parsing (Nigerian boards use "Role at Company - Location") ─────────
