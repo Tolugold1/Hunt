@@ -15,6 +15,7 @@ const JOB_SOURCES = [
   { id: "twitter", label: "X / Twitter (recent posts — needs API token)" },
   { id: "adzuna", label: "Adzuna (global aggregator — incl. LinkedIn-sourced jobs)" },
   { id: "remoteornothing", label: "Remote or Nothing (remote-only board)" },
+  { id: "weworkremotely", label: "WeWorkRemotely (100 latest remote jobs)" },
   { id: "greenhouse", label: "Greenhouse (ATS — coming soon)" },
   { id: "lever", label: "Lever (ATS — coming soon)" },
   { id: "workable", label: "Workable (ATS — coming soon)" },

@@ -566,6 +566,26 @@ async function fetchHotNigerianJobs(): Promise<FetchResult> {
   return { jobs, sourceName: "HotNigerianJobs", preFiltered: false };
 }
 
+async function fetchWeWorkRemotely(): Promise<FetchResult> {
+  // WWR's public RSS lists the ~100 latest remote jobs (no login needed). Titles
+  // are "Company: Job Title"; the apply method lives on the linked WWR job page,
+  // so these are link-out jobs (enrichment picks up an email when one is present).
+  const { ok, text, status } = await rawFetch("https://weworkremotely.com/remote-jobs.rss");
+  if (!ok) return { jobs: [], sourceName: "WeWorkRemotely", error: `WeWorkRemotely: HTTP ${status || "timeout"}` };
+
+  const raw = parseRSS(text);
+  const jobs = raw.map((j) => {
+    // Split "Company: Job Title" on the first ": ".
+    const idx = j.title.indexOf(": ");
+    if (idx > 0 && idx < 60) {
+      return { ...j, company: j.title.slice(0, idx).trim(), title: j.title.slice(idx + 2).trim() };
+    }
+    return j;
+  });
+  console.log(`[job-discovery] WeWorkRemotely: RSS → ${jobs.length}`);
+  return { jobs, sourceName: "WeWorkRemotely", preFiltered: false };
+}
+
 async function fetchMyJobMag(keywords: string[]): Promise<FetchResult> {
   const q = (keywords[0] ?? "").replace(/\s+/g, "+");
   const url = `https://www.myjobmag.com/search/jobs?q=${q}&q=${q}`;
@@ -858,6 +878,10 @@ export async function runJobDiscovery(hunt: Hunt): Promise<DiscoveryResult> {
 
   if (hunt.sources.includes("remoteornothing")) {
     userFetches.push(fetchRemoteOrNothing(hunt.keywords));
+  }
+
+  if (hunt.sources.includes("weworkremotely")) {
+    userFetches.push(fetchWeWorkRemotely());
   }
 
   if (hunt.sources.includes("fuzu")) {
