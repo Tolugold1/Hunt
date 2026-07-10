@@ -104,7 +104,7 @@ const FORM_APPLY_SIGNALS = [
   /online\s+application\s+(?:form|portal|system)/i,
 ];
 
-function extractApplyEmail(description: string): string | undefined {
+export function extractApplyEmail(description: string): string | undefined {
   // An explicit "send your CV to <email>" always wins — even alongside a form mention.
   for (const pattern of STRONG_EMAIL_PATTERNS) {
     const m = description.match(pattern);
@@ -449,10 +449,10 @@ async function enrichCandidates<T extends RawJob>(jobs: T[]): Promise<T[]> {
 // ─── X / Twitter (official API v2 recent search) ─────────────────────────────
 
 // Strip emojis / pictographs so tweet text doesn't leak into the cover letter.
-const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}️]/gu;
+export const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}️]/gu;
 
 /** A clean, professional role title for a tweet — never the raw emoji-laden text. */
-function tweetTitle(text: string, keywords: string[]): string {
+export function tweetTitle(text: string, keywords: string[]): string {
   const lower = text.toLowerCase();
   // Prefer the matched hunt keyword — it's a clean role name ("Software Engineer").
   const matched = keywords.find((k) => k && lower.includes(k.toLowerCase()));

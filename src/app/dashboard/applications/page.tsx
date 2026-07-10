@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import { ApplicationStatus } from "@prisma/client";
 import DeleteApplicationButton from "./DeleteApplicationButton";
+import BackfillButton from "./BackfillButton";
+
+const SEALED_STATUSES: ApplicationStatus[] = ["SENT", "APPROVED", "REPLIED", "INTERVIEW"];
 
 const STATUS_LABELS: Record<ApplicationStatus, { label: string; color: string }> = {
   DRAFT: { label: "Draft", color: "text-yellow-400 bg-yellow-500/10" },
@@ -41,6 +44,15 @@ export default async function ApplicationsPage({
   });
   const counts = Object.fromEntries(statusCounts.map((r) => [r.status, r._count]));
 
+  // Count buggy imported X jobs (markers the old fetcher left in the description).
+  const dirtyXCount = await db.application.count({
+    where: {
+      userId,
+      status: { notIn: SEALED_STATUSES },
+      OR: [{ jobDescription: { contains: "on X" } }, { jobDescription: { contains: "🔗" } }],
+    },
+  });
+
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
@@ -55,6 +67,9 @@ export default async function ApplicationsPage({
           + Add job
         </Link>
       </div>
+
+      {/* Backfill banner — fix buggy imported X jobs in place */}
+      {dirtyXCount > 0 && <BackfillButton count={dirtyXCount} />}
 
       {/* Hunt filter banner */}
       {huntId && (
