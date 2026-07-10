@@ -448,18 +448,23 @@ async function enrichCandidates<T extends RawJob>(jobs: T[]): Promise<T[]> {
 
 // ─── X / Twitter (official API v2 recent search) ─────────────────────────────
 
-/** Build a display title centred on the first matched keyword so it reads as a role. */
+// Strip emojis / pictographs so tweet text doesn't leak into the cover letter.
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}️]/gu;
+
+/** A clean, professional role title for a tweet — never the raw emoji-laden text. */
 function tweetTitle(text: string, keywords: string[]): string {
-  const one = text.replace(/\s+/g, " ").trim();
-  const lower = one.toLowerCase();
-  for (const k of keywords) {
-    const i = lower.indexOf(k.toLowerCase());
-    if (i !== -1) {
-      const start = Math.max(0, i - 30);
-      return one.slice(start, start + 90).trim();
-    }
-  }
-  return one.slice(0, 80);
+  const lower = text.toLowerCase();
+  // Prefer the matched hunt keyword — it's a clean role name ("Software Engineer").
+  const matched = keywords.find((k) => k && lower.includes(k.toLowerCase()));
+  if (matched) return matched.replace(/\b\w/g, (c) => c.toUpperCase());
+  // Fallback: de-emojify, drop "HIRING:" noise, take the leading role-ish text.
+  const clean = text
+    .replace(EMOJI_RE, "")
+    .replace(/^\W*(?:we(?:'re|\s+are)?\s+)?hiring[:!\s-]*/i, "")
+    .replace(/^\W+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean.slice(0, 70) || "Job opening";
 }
 
 interface XTweet {
@@ -522,20 +527,26 @@ async function fetchXJobs(keywords: string[]): Promise<FetchResult> {
   const jobs: RawJob[] = tweets.map((t) => {
     const text = t.text.replace(/\s+/g, " ").trim();
     const author = t.author_id ? users.get(t.author_id) : undefined;
-    const handle = author?.username ? `@${author.username}` : "";
-    // First non-x.com link = likely the apply link.
+    // First non-x.com link = likely the external apply link.
     const applyLink = (t.entities?.urls ?? [])
       .map((u) => u.expanded_url)
       .find((u): u is string => !!u && !/(?:^https?:\/\/)?(?:www\.)?(?:x|twitter)\.com/i.test(u));
     const permalink = author?.username ? `https://x.com/${author.username}/status/${t.id}` : `https://x.com/i/status/${t.id}`;
+    // Detect the apply email from the ORIGINAL text (emails are intact there).
     const applyEmail = extractApplyEmail(text);
-    const description = `${text}${applyLink ? `\n\n🔗 ${applyLink}` : ""}${handle ? `\n\n— via ${handle} on X` : ""}`;
+    // Clean tweet body for the description — no appended link/handle and no emojis,
+    // so none of that leaks into the generated cover letter.
+    const cleanText = text.replace(EMOJI_RE, "").replace(/\s+/g, " ").trim();
     return {
       title: tweetTitle(text, keywords),
-      company: author?.name || handle || "Unknown",
+      // The tweet's AUTHOR is the poster (often a recruiter/aggregator), NOT the
+      // hiring company. Leave it Unknown so the cover letter says "the role".
+      company: "Unknown",
       location: /remote/i.test(text) ? "Remote" : "Unknown",
-      url: applyLink ?? permalink,
-      description,
+      // Email jobs apply by email (permalink is just for reference); link jobs point
+      // at the external apply link.
+      url: applyEmail ? permalink : (applyLink ?? permalink),
+      description: cleanText,
       applyType: (applyEmail ? "EMAIL" : "LINK_OUT") as "EMAIL" | "LINK_OUT",
       applyEmail,
     };
