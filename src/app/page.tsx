@@ -47,6 +47,12 @@ export default async function Home() {
             </div>
           ))}
         </div>
+
+        <footer className="pt-10 flex items-center justify-center gap-4 text-xs text-gray-600">
+          <Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</Link>
+          <span aria-hidden>·</span>
+          <Link href="/terms" className="hover:text-gray-400 transition-colors">Terms of Service</Link>
+        </footer>
       </div>
     </main>
   );
