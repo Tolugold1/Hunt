@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 // TODO: replace with your legal entity name, support address, and governing law
 // before submitting the OAuth consent screen for verification.
 const COMPANY = "Hunt";
-const CONTACT_EMAIL = "support@yourdomain.com";
+const CONTACT_EMAIL = "toluadelekesteve@gmail.com";
 const EFFECTIVE_DATE = "July 12, 2026";
-const GOVERNING_LAW = "the laws of your jurisdiction";
+// const GOVERNING_LAW = "the laws of your jurisdiction";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -132,9 +132,9 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="12. Governing law">
+        {/* <Section title="12. Governing law">
           <p>These Terms are governed by {GOVERNING_LAW}.</p>
-        </Section>
+        </Section> */}
 
         <Section title="13. Contact">
           <p>

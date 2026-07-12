@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 // TODO: replace with your legal entity name and support address before submitting
 // the OAuth consent screen for verification.
 const COMPANY = "Hunt";
-const CONTACT_EMAIL = "support@yourdomain.com";
+const CONTACT_EMAIL = "toluadelekesteve@gmail.com";
 const EFFECTIVE_DATE = "July 12, 2026";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
